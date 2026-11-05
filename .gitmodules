@@ -14,3 +14,7 @@
 	path = external/unitree_sdk2
 	url = https://github.com/unitreerobotics/unitree_sdk2.git
 	shallow = true
+[submodule "external/mjswan"]
+	path = external/mjswan
+	url = https://github.com/ttktjmt/mjswan.git
+	shallow = true

@@ -2,7 +2,7 @@
 
 This repository describes how we would build a humanoid fighting league around Unitree G1 robots, and gives developers a starting point for the control, training and deployment work.
 
-The working platform is Unitree G1. League guides, figures and examples live under `docs/`. Under `external/`, SuperMimic is tracked directly as source code; SONIC, both Unitree training repositories and Unitree SDK2 are pinned submodules. Start with [repository setup](repositories.md).
+The working platform is Unitree G1. League guides, figures and examples live under `docs/`. Under `external/`, SuperMimic is tracked directly as source code; SONIC, both Unitree training repositories, Unitree SDK2 and mjswan are pinned submodules. Start with [repository setup](repositories.md).
 
 The experience we want is straightforward: a pilot uses a gamepad to move, guard and request a skill, while the robot handles its own balance and execution. A punch should remain useful when it meets an opponent, misses its target or is interrupted. After losing balance, the robot should have a defined path back to a controllable state. The same commands should let a developer practice in simulation and later operate a qualified physical robot.
 
@@ -130,6 +130,8 @@ There is integration work between the research components. SONIC's released trai
 Use AWS through SkyPilot to make the experiments repeatable. Begin with the supplied [Unitree G1 training job](examples/sky_unitree_aws.yaml), which runs Unitree's trainer with a small locomotion workload. It also accepts a motion tracking task and a prepared NPZ reference. A separate [stock mjlab job](examples/sky_aws.yaml) is available for comparison. Increase environment count and training duration based on measured throughput and memory use. Save resolved configurations, model versions and evaluation results alongside checkpoints. [Training and cloud setup](training.md#aws-through-skypilot)
 
 For scratch training, compare methods at a fixed evaluation target. For contact adaptation, compare success across held out target configurations and disturbances. For both, include failed runs, evaluation time and restart costs in the compute record. A fast training loop is valuable when it produces a controller that passes the deployment tests.
+
+For visualization and sharing, [mjswan](repositories.md#browser-visualization) runs MuJoCo scenes and ONNX policies in the browser. It provides a useful starting point for an interactive G1 demo that developers can inspect without installing the training environment. Port the policy's observations, action processing and timing alongside the scene, then compare its behavior with the original evaluation runtime.
 
 ## Bring the trained behavior onto hardware
 

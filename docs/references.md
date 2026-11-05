@@ -30,6 +30,7 @@ The initial sources were checked on 21 October 2026; SuperMimic and additional d
 | [Unitree RL Mjlab](https://github.com/unitreerobotics/unitree_rl_mjlab) | Unitree G1 training with mjlab and MuJoCo Warp |
 | [Unitree RL Lab](https://github.com/unitreerobotics/unitree_rl_lab) | Unitree G1 training with Isaac Lab, followed by MuJoCo deployment validation |
 | [Unitree SDK2](https://github.com/unitreerobotics/unitree_sdk2) | C++ communication library and robot examples for deployment |
+| [mjswan](https://github.com/ttktjmt/mjswan) and [demo](https://ttktjmt.github.io/mjswan/) | Browser visualization of MuJoCo scenes and ONNX policies; static site sharing |
 | [MuJoCo contact modeling](https://mujoco.readthedocs.io/en/stable/modeling.html#contact-parameters) | Contact compliance and solver parameters |
 | [mjlab cloud guide](https://mujocolab.github.io/mjlab/v1.6.0/source/training/cloud.html) | Upstream SkyPilot templates |
 | [SkyPilot AWS setup](https://docs.skypilot.ai/en/latest/cloud-setup/cloud-permissions/aws.html) | Account access, permissions and profiles |
