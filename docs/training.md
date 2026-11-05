@@ -73,9 +73,9 @@ This trains the stock tracking task. It does not fine tune SONIC or train a cont
 
 ## AWS through SkyPilot
 
-The included `unitree_rl_mjlab` revision has no bundled SkyPilot task templates. Those are provided by [upstream mjlab](https://github.com/mujocolab/mjlab/tree/main/scripts/cloud). Its current training template targets Lambda Cloud by default; AWS and Unitree training require changes to the resource, setup and run sections. Unitree pins `mjlab==1.2.0`, while the example below uses upstream mjlab v1.6.0, so keep their environments separate. See [repository setup](repositories.md#cloud-training).
+The supplied [Unitree AWS task](examples/sky_unitree_aws.yaml) adds SkyPilot support around `unitree_rl_mjlab`, using the setup/run pattern from [upstream mjlab](https://github.com/mujocolab/mjlab/tree/main/scripts/cloud). It fetches Unitree commit `1425b15f73bd4095f0df53709d7c389c3eb9e790`, matching our submodule, and installs its dependencies in a separate Python 3.11 environment. Unitree pins `mjlab==1.2.0` and `mujoco-warp==3.5.0`; installed dependency versions are saved with the outputs. Local submodule edits are not uploaded by this task.
 
-The supplied [AWS example](examples/sky_aws.yaml) runs a short stock G1 velocity training job. It pins mjlab v1.6.0 at commit `0fb8a681136be94ffc636a3dd423cabb97d91f10`, uses TensorBoard, and needs no motion dataset or W&B credential. It is an infrastructure smoke test, not the proposed fighting trainer. The YAML and command names were checked against source; no cloud training was run for this document.
+The default is `Unitree-G1-Flat`, 512 environments and 100 iterations on one AWS L4. This is a small locomotion test with TensorBoard logging, requiring neither a motion dataset nor a W&B credential. It exercises Unitree's training workflow; the proposed contact curriculum and SONIC adaptation still need implementation. The template and command construction were checked locally; a GPU training run remains to be validated.
 
 Install `uv`, SkyPilot and AWS CLI v2 locally. Configure your own AWS account and an enabled GPU region with sufficient quota and SkyPilot permissions. SSO users can use a named profile:
 
@@ -85,21 +85,49 @@ aws configure sso --profile robot-fights
 export AWS_PROFILE=robot-fights
 aws sso login --profile robot-fights
 sky check aws
-sky launch -c robot-fights-dev docs/examples/sky_aws.yaml
-sky logs robot-fights-dev
+sky launch -c robot-fights-unitree docs/examples/sky_unitree_aws.yaml
+sky logs robot-fights-unitree
 ```
 
 Run the launch command from this repository's root. L4 is an initial resource request; choose a supported GPU and region after checking availability. Launching creates billable resources. [AWS setup](https://docs.skypilot.ai/en/latest/cloud-setup/cloud-permissions/aws.html)
 
-The example intentionally leaves the instance running so the first checkpoint can be inspected and retrieved. Copy outputs before terminating it:
+After the small run succeeds, start a longer run on the same cluster:
+
+```bash
+sky exec robot-fights-unitree docs/examples/sky_unitree_aws.yaml \
+  --env NUM_ENVS=4096 --env MAX_ITERATIONS=10001 --env SEED=42
+```
+
+For multiple GPUs, change `resources.accelerators` before launching a cluster. The trainer uses `--gpu-ids all`; adjust environment count to fit each GPU. These settings control experiment size and are not a guarantee of convergence.
+
+For motion tracking, select the Unitree task and pass a compatible NPZ. This example uses the G1 reference already present in the pinned upstream repository:
+
+```bash
+sky exec robot-fights-unitree docs/examples/sky_unitree_aws.yaml \
+  --env TASK=Unitree-G1-Tracking-No-State-Estimation \
+  --env MOTION_FILE=deploy/robots/g1/config/policy/mimic/dance1_subject2/params/dance1_subject2.npz \
+  --env NUM_ENVS=1024 --env MAX_ITERATIONS=1000
+```
+
+For your own motion, use Unitree's `scripts/csv_to_npz.py` and matching robot configuration, then upload the result to the existing cluster:
+
+```bash
+scp /path/to/motion.npz robot-fights-unitree:~/robot_fights_unitree_mjlab/motion.npz
+```
+
+Use `--env MOTION_FILE=motion.npz` in the tracking command. Paths are resolved on the remote machine, relative to its Unitree checkout. The launcher rejects tracking jobs with a missing motion file. See the pinned [Unitree motion workflow](https://github.com/unitreerobotics/unitree_rl_mjlab/blob/1425b15f73bd4095f0df53709d7c389c3eb9e790/README.md#2-motion-imitation-training).
+
+The instance stays running so checkpoints can be inspected and retrieved. Copy outputs before terminating it:
 
 ```bash
 mkdir -p runs
-rsync -av robot-fights-dev:~/robot_fights_mjlab/logs/ runs/
-sky logs robot-fights-dev --sync-down
-sky down robot-fights-dev
+rsync -av robot-fights-unitree:~/robot_fights_unitree_mjlab/logs/ runs/unitree/
+sky logs robot-fights-unitree --sync-down
+sky down robot-fights-unitree
 ```
 
-The SSH alias is created by SkyPilot. `--sync-down` retrieves job logs, not arbitrary model files. Confirm the model files and resolved configs arrived before running `sky down`. [CLI reference](https://docs.skypilot.ai/en/latest/reference/cli.html)
+The SSH alias is created by SkyPilot. Training outputs are under `logs/rsl_rl/g1_velocity/` or `logs/rsl_rl/g1_tracking/`. `--sync-down` retrieves job logs, not arbitrary model files. Confirm the model files and resolved configs arrived before running `sky down`. [CLI reference](https://docs.skypilot.ai/en/latest/reference/cli.html)
 
 For recurring training, write checkpoints to durable storage, test resume, then enable automatic teardown or managed jobs. Persist model, optimizer, normalizer, curriculum and random state where exact resume is required. Spot recovery depends on that application support. mjlab's [upstream cloud templates](https://mujocolab.github.io/mjlab/v1.6.0/source/training/cloud.html) are a useful next step.
+
+The separate [stock mjlab AWS example](examples/sky_aws.yaml) remains available. It uses mjlab v1.6.0 at `0fb8a681136be94ffc636a3dd423cabb97d91f10` and the upstream G1 velocity task. Launch it as `robot-fights-dev`; its outputs are under `~/robot_fights_mjlab/logs/`. Keep its environment and checkpoints separate from the Unitree workflow.

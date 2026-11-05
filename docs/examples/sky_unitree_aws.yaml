@@ -1,0 +1,70 @@
+# Unitree G1 training through SkyPilot. Run from this repository's root:
+# sky launch -c robot-fights-unitree docs/examples/sky_unitree_aws.yaml
+# Download checkpoints before terminating: sky down robot-fights-unitree
+name: robot-fights-unitree
+
+resources:
+  cloud: aws
+  accelerators: L4:1
+  disk_size: 100
+
+envs:
+  TASK: Unitree-G1-Flat
+  NUM_ENVS: "512"
+  MAX_ITERATIONS: "100"
+  SEED: "42"
+  # Optional NPZ path on the remote machine, relative to the Unitree checkout.
+  MOTION_FILE: ""
+  MUJOCO_GL: egl
+
+setup: |
+  set -euo pipefail
+  sudo apt-get update
+  sudo apt-get install -y git curl libegl-dev
+  if ! command -v uv >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  fi
+  export PATH="$HOME/.local/bin:$PATH"
+
+  # Match external/unitree_rl_mjlab; keep its environment separate from stock mjlab.
+  unitree_revision=1425b15f73bd4095f0df53709d7c389c3eb9e790
+  unitree_dir="$HOME/robot_fights_unitree_mjlab"
+  if [ ! -d "$unitree_dir/.git" ]; then
+    git init "$unitree_dir"
+    git -C "$unitree_dir" remote add origin https://github.com/unitreerobotics/unitree_rl_mjlab.git
+    git -C "$unitree_dir" fetch --depth 1 origin "$unitree_revision"
+    git -C "$unitree_dir" checkout --detach FETCH_HEAD
+  fi
+  cd "$unitree_dir"
+  test "$(git rev-parse HEAD)" = "$unitree_revision"
+  if [ ! -x .venv/bin/python ]; then
+    uv venv --python 3.11 .venv
+  fi
+  uv pip install --python .venv/bin/python --editable .
+
+run: |
+  set -euo pipefail
+  export PATH="$HOME/.local/bin:$PATH"
+  cd "$HOME/robot_fights_unitree_mjlab"
+  .venv/bin/python -c 'import torch; assert torch.cuda.is_available(), "CUDA is unavailable; check the GPU driver and PyTorch installation"'
+
+  motion_args=()
+  if [ -n "$MOTION_FILE" ]; then
+    test -f "$MOTION_FILE" || { echo "Motion file not found: $MOTION_FILE" >&2; exit 1; }
+    motion_args=(--motion-file "$MOTION_FILE")
+  elif [[ "$TASK" == *Tracking* ]]; then
+    echo "Set MOTION_FILE to a Unitree-compatible NPZ for tracking tasks." >&2
+    exit 1
+  fi
+
+  # Keep source and installed dependency versions with the training outputs.
+  mkdir -p logs
+  git rev-parse HEAD > logs/source-revision.txt
+  uv pip freeze --python .venv/bin/python > logs/requirements-resolved.txt
+  .venv/bin/python scripts/train.py "$TASK" \
+    --env.scene.num-envs "$NUM_ENVS" \
+    --agent.max-iterations "$MAX_ITERATIONS" \
+    --agent.seed "$SEED" \
+    --agent.logger tensorboard \
+    --gpu-ids all \
+    "${motion_args[@]}"

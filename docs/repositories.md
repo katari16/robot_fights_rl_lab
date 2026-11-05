@@ -42,14 +42,14 @@ Follow the upstream instructions for model weights, datasets and environment ins
 
 ## Cloud training
 
-**Unitree's repository does not bundle SkyPilot task templates at the pinned revision.** They are in [upstream mjlab's cloud scripts](https://github.com/mujocolab/mjlab/tree/main/scripts/cloud), with a [cloud setup guide](https://mjlab.readthedocs.io/en/latest/source/training/cloud.html).
+This repository adds a [Unitree AWS task](examples/sky_unitree_aws.yaml), following the setup/run pattern in [upstream mjlab's cloud scripts](https://github.com/mujocolab/mjlab/tree/main/scripts/cloud). Unitree's repository does not bundle those templates at the pinned revision.
 
-The upstream `train.yaml` currently targets Lambda Cloud. To run Unitree training on AWS, adapt the GPU/cloud resources, install Unitree's dependencies, and use its entry point, for example `python scripts/train.py Unitree-G1-Flat` from the Unitree repository directory.
+The task fetches the same Unitree revision as our submodule, creates a separate Python 3.11 environment, installs Unitree's dependencies and runs `scripts/train.py`. Defaults are a small G1 locomotion run on one AWS L4 with TensorBoard logging. Task, environment count, iterations, seed and motion file are configurable.
 
-Unitree's [setup.py](https://github.com/unitreerobotics/unitree_rl_mjlab/blob/1425b15f73bd4095f0df53709d7c389c3eb9e790/setup.py) pins `mjlab==1.2.0`. Our [AWS example](examples/sky_aws.yaml) uses upstream mjlab v1.6.0 and its stock G1 task; it is not a Unitree training launcher. Launch that example from the top-level repository directory with:
+After configuring SkyPilot and AWS, launch from the top-level repository directory:
 
 ```bash
-sky launch -c robot-fights-dev docs/examples/sky_aws.yaml
+sky launch -c robot-fights-unitree docs/examples/sky_unitree_aws.yaml
 ```
 
-No training or cloud resources are launched by cloning this repository.
+See [cloud training](training.md#aws-through-skypilot) for credentials, motion tracking, checkpoint retrieval and shutdown. Unitree pins `mjlab==1.2.0`; the separate [stock mjlab example](examples/sky_aws.yaml) uses v1.6.0. The Unitree task fetches upstream source on the remote machine; local submodule edits are not uploaded. Cloning this repository launches no cloud resources.
