@@ -2,10 +2,6 @@
 	path = external/GR00T-WholeBodyControl
 	url = https://github.com/NVlabs/GR00T-WholeBodyControl.git
 	shallow = true
-[submodule "external/supermimic_vibed"]
-	path = external/supermimic_vibed
-	url = https://github.com/zita-ch/supermimic_vibed.git
-	shallow = true
 [submodule "external/unitree_rl_mjlab"]
 	path = external/unitree_rl_mjlab
 	url = https://github.com/unitreerobotics/unitree_rl_mjlab.git

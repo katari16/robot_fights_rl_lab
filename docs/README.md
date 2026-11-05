@@ -2,7 +2,7 @@
 
 This repository describes how we would build a humanoid fighting league around Unitree G1 robots, and gives developers a starting point for the control, training and deployment work.
 
-The working platform is Unitree G1. All guides, figures and examples live under `docs/`; the SONIC, SuperMimic and Unitree mjlab source repositories are pinned under `external/`. Start with [repository setup](repositories.md).
+The working platform is Unitree G1. League guides, figures and examples live under `docs/`. Under `external/`, SuperMimic is tracked directly as source code; SONIC and Unitree mjlab are pinned submodules. Start with [repository setup](repositories.md).
 
 The experience we want is straightforward: a pilot uses a gamepad to move, guard and request a skill, while the robot handles its own balance and execution. A punch should remain useful when it meets an opponent, misses its target or is interrupted. After losing balance, the robot should have a defined path back to a controllable state. The same commands should let a developer practice in simulation and later operate a qualified physical robot.
 

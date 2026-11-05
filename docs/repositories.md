@@ -2,24 +2,32 @@
 
 [Main guide](README.md)
 
-This repository targets Unitree G1. Documentation, figures and examples live in `docs/`. The three upstream source repositories are included as Git submodules in `external/`, pinned to specific commits rather than copied into this repository.
+This repository targets Unitree G1. League documentation, figures and examples live in `docs/`. Under `external/`, SuperMimic is included as ordinary tracked source files. SONIC and Unitree mjlab remain pinned Git submodules.
 
 ## Included source
 
-| Directory | Role | Pinned revision |
-| --- | --- | --- |
-| [GR00T-WholeBodyControl](../external/GR00T-WholeBodyControl) | NVIDIA SONIC whole body control baseline and deployment | [1e1ec4f](https://github.com/NVlabs/GR00T-WholeBodyControl/commit/1e1ec4f5f27e6c3e03048f693bd7c60cce04afda) |
-| [supermimic_vibed](../external/supermimic_vibed) | Independent SuperMimic reproduction for training motion trackers | [0525a23](https://github.com/zita-ch/supermimic_vibed/commit/0525a23a2dcfa61f8543f98b84c075fe66d9d286) |
-| [unitree_rl_mjlab](../external/unitree_rl_mjlab) | Unitree G1 locomotion, motion tracking and deployment with mjlab | [1425b15](https://github.com/unitreerobotics/unitree_rl_mjlab/commit/1425b15f73bd4095f0df53709d7c389c3eb9e790) |
+| Directory | Role | Storage | Upstream revision |
+| --- | --- | --- | --- |
+| [GR00T-WholeBodyControl](../external/GR00T-WholeBodyControl) | NVIDIA SONIC whole body control baseline and deployment | Submodule | [1e1ec4f](https://github.com/NVlabs/GR00T-WholeBodyControl/commit/1e1ec4f5f27e6c3e03048f693bd7c60cce04afda) |
+| [supermimic_vibed](../external/supermimic_vibed) | Independent SuperMimic reproduction for training motion trackers | Tracked source | [0525a23](https://github.com/zita-ch/supermimic_vibed/commit/0525a23a2dcfa61f8543f98b84c075fe66d9d286) |
+| [unitree_rl_mjlab](../external/unitree_rl_mjlab) | Unitree G1 locomotion, motion tracking and deployment with mjlab | Submodule | [1425b15](https://github.com/unitreerobotics/unitree_rl_mjlab/commit/1425b15f73bd4095f0df53709d7c389c3eb9e790) |
 
 SONIC supplies the existing controller path. SuperMimic supplies an independent implementation to study and train a new tracker. Unitree mjlab supplies the robot-specific training and deployment workflow. Use each repository's installation instructions in a separate environment; their checkpoints and task commands are not interchangeable.
 
+## SuperMimic source
+
+The complete tracked contents of upstream revision `0525a23a2dcfa61f8543f98b84c075fe66d9d286` were imported into `external/supermimic_vibed`, including its [original MIT license](../external/supermimic_vibed/LICENSE), scripts and demonstration assets. There is no nested Git repository. Changes to this code are committed directly in `robot_fights_rl_lab`.
+
 ## Get the sources
+
+SuperMimic is included in an ordinary clone. Recursive submodule initialization fetches SONIC and Unitree mjlab:
 
 ```bash
 git clone --recurse-submodules https://github.com/katari16/robot_fights_rl_lab.git
 cd robot_fights_rl_lab
 ```
+
+If an older checkout initialized SuperMimic as a submodule, preserve any local edits and run `git submodule deinit external/supermimic_vibed` before pulling this migration. Without `--force`, Git refuses to discard local changes.
 
 For an existing checkout, run from the repository root:
 
@@ -30,7 +38,7 @@ git submodule update --init --recursive
 git submodule status
 ```
 
-Submodules contain source code. Follow the upstream instructions for model weights, datasets and environment installation. Match the controller to the actual G1 actuator configuration before deployment.
+Follow the upstream instructions for model weights, datasets and environment installation. Match the controller to the actual G1 actuator configuration before deployment.
 
 ## Cloud training
 
