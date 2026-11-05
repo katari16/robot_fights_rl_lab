@@ -1,0 +1,340 @@
+Quick Start
+===========
+
+This guide helps you run pre-trained models and start training your own agents.
+
+Run Pre-trained Models
+----------------------
+
+We provide pre-trained checkpoints for several robots and controller families.
+See the :doc:`pretrained_models` catalog for a concise overview and links to
+the detailed model card stored beside each checkpoint.
+
+The commands below use the recommended IsaacLab checkpoints.
+Only the domain-randomized G1 deployment tracker is currently expected to
+transfer to compatible simulators or hardware.
+
+**Example Motion Data:**
+
+We provide small example motion files for testing with robot models:
+
+* ``data/motion_for_trackers/g1_random_subset_tiny.pt`` - Small subset of retargeted AMASS for G1
+* ``data/motion_for_trackers/g1_bones_seed_mini.pt`` - Small subset of BONES-SEED retargeted motions for G1
+* ``data/motion_for_trackers/soma23_bones_seed_mini.pt`` - Small subset of BONES-SEED motions for SOMA 23-body humanoid
+* ``data/motion_for_trackers/anatomic_soma_bones_seed_mini.pt`` - Ten BONES-SEED clips retargeted to the anatomical SOMA humanoid
+* ``data/motion_for_trackers/crouch_soma23.pt`` - Small SOMA crouch dataset for GPC and PEFT examples
+* ``data/motion_for_trackers/h1_2_random_subset_tiny.pt`` - Small subset of retargeted AMASS for H1-2
+
+For SMPL motion data, see :doc:`amass_preparation` to generate your own MotionLib from AMASS.
+There is a simple script ``scripts/subset_motion_lib.py`` to subset the motion lib into a smaller size,
+if your local GPU memory is not enough to load the entire motion lib of AMASS.
+
+**Run Inference:**
+
+.. code-block:: bash
+
+   # Run G1 on BONES-SEED motions
+   python protomotions/inference_agent.py \
+       --checkpoint data/pretrained_models/motion_tracker/g1-bones-deploy/inference_last.ckpt \
+       --motion-file data/motion_for_trackers/g1_bones_seed_mini.pt \
+       --simulator isaaclab
+
+   # Headless validation on a server or VM
+   python protomotions/inference_agent.py \
+       --checkpoint data/pretrained_models/motion_tracker/g1-bones-deploy/inference_last.ckpt \
+       --motion-file data/motion_for_trackers/g1_bones_seed_mini.pt \
+       --simulator isaaclab \
+       --num-envs 100 \
+       --headless \
+       --full-eval
+
+   # Run SOMA 23-body humanoid on BONES-SEED motions
+   python protomotions/inference_agent.py \
+       --checkpoint data/pretrained_models/motion_tracker/soma-bones/inference_last_lab.ckpt \
+       --motion-file data/motion_for_trackers/soma23_bones_seed_mini.pt \
+       --simulator isaaclab
+
+   # Run the SOMA BONES-SEED FSQ tracker used by GPC
+   python protomotions/inference_agent.py \
+       --checkpoint data/pretrained_models/motion_tracker/soma_bones_fsq/inference_last.ckpt \
+       --motion-file data/motion_for_trackers/soma23_bones_seed_mini.pt \
+       --simulator isaaclab
+
+   # Run the anatomical SOMA BONES-SEED FSQ tracker (IsaacLab or MuJoCo)
+   python protomotions/inference_agent.py \
+       --checkpoint data/pretrained_models/motion_tracker/anatomic_soma_bones_fsq/inference_last.ckpt \
+       --motion-file data/motion_for_trackers/anatomic_soma_bones_seed_mini.pt \
+       --simulator mujoco --num-envs 1
+
+   # Run the SOMA GPC prior with its SOMA BONES-SEED FSQ decoder
+   python protomotions/inference_agent.py \
+       --checkpoint data/pretrained_models/gpc_prior/soma_bones/inference_last.ckpt \
+       --motion-file data/motion_for_trackers/crouch_soma23.pt \
+       --simulator isaaclab \
+       --num-envs 1
+
+   # Test the domain-randomized G1 tracker in MuJoCo
+   python protomotions/inference_agent.py \
+       --checkpoint data/pretrained_models/motion_tracker/g1-bones-deploy/inference_last.ckpt \
+       --motion-file data/motion_for_trackers/g1_bones_seed_mini.pt \
+       --simulator mujoco \
+       --num-envs 1
+
+.. note::
+
+   On headless machines, ``--full-eval`` is usually easier to validate because
+   it exits after evaluating the motion set and prints metrics. Without
+   ``--full-eval``, inference runs continuously until interrupted.
+
+   Cross-simulator transfer should only be expected when the model card states
+   that the policy used the full transfer-oriented domain-randomization recipe.
+   See :doc:`pretrained_models` and
+   :doc:`../tutorials/workflows/domain_randomization` for details.
+
+Train Your First Agent
+----------------------
+
+Motion Imitation Training With DeepMimic
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Train a motion imitation agent using an MLP policy. The command below uses one
+of the shipped G1 motion files, so it runs from a fresh checkout:
+
+.. code-block:: bash
+
+   python protomotions/train_agent.py \
+       --robot-name g1 \
+       --simulator isaaclab \
+       --experiment-path examples/experiments/mimic/mlp.py \
+       --experiment-name g1_mimic_example \
+       --motion-file data/motion_for_trackers/g1_random_subset_tiny.pt \
+       --num-envs 4096 \
+       --batch-size 16384 \
+       --ngpu 1
+
+The motion file must be one made for the robot you train. Each file in
+``data/motion_for_trackers/`` is for a single robot, and the environment refuses
+a file whose body and degree-of-freedom counts differ from the robot's. To build
+a motion library of your own, for example AMASS motions for the SMPL humanoid,
+see :doc:`amass_preparation`.
+
+Selecting Simulator and Robot
+-----------------------------
+
+Simulator Selection
+~~~~~~~~~~~~~~~~~~~
+
+Use the ``--simulator`` argument:
+
+* ``isaacgym`` - NVIDIA IsaacGym legacy GPU backend
+* ``isaaclab`` - NVIDIA IsaacLab/IsaacSim (recommended for training)
+* ``newton`` - NVIDIA Newton 1.0.0 (built on MuJoCo Warp)
+* ``mujoco`` - MuJoCo CPU-only (single env, for quick testing/debugging)
+
+Robot Selection
+~~~~~~~~~~~~~~~
+
+Use the ``--robot-name`` argument:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Robot
+     - Description
+   * - ``smpl``
+     - SMPL humanoid (digital human)
+   * - ``smplx``
+     - SMPL-X humanoid with hands
+   * - ``g1``
+     - Unitree G1 humanoid robot
+   * - ``h1_2``
+     - Unitree H1 humanoid robot (version 2)
+   * - ``amp``
+     - AMP humanoid
+   * - ``soma23``
+     - SOMA 23-body humanoid (digital human)
+
+See :doc:`../tutorials/workflows/custom_robot` for adding your own robot.
+
+Experiment Management
+---------------------
+
+The ``--experiment-name`` determines where results are saved. When training with an 
+existing experiment name, training automatically resumes from the last checkpoint.
+
+Results are saved to:
+
+.. code-block:: text
+
+   results/<experiment_name>/
+   ├── config.yaml                      # CLI arguments and wandb ID
+   ├── resolved_configs.json            # The config bundle (tagged JSON) - source of truth
+   ├── experiment_config.py             # Copy of experiment file
+   ├── last.ckpt                        # Latest model checkpoint
+   ├── score_based.ckpt                 # Best-performing checkpoint (by eval score)
+   ├── epoch_100.ckpt                   # Intermediate checkpoints (if configured)
+   └── env_<task_id>.ckpt               # Environment state for exact resume
+
+.. note::
+
+   Resume (if experiment name is the same) uses exact saved configs - CLI overrides are ignored during resume. This design helps automatic resume with many-gpu runs on clusters.
+
+   For config changes, use a new experiment name. When training on cloud/cluster, you can also copy the source code to a new directory and train there with any experiment name.
+
+.. warning::
+
+   **Do NOT hand-edit resolved_configs.json.** It is the source of truth: a
+   plain-text tagged JSON tree rebuilt through the real constructors on load, so
+   a hand-edited bundle fails naming the field, the class and the file. For
+   config changes, use ``--overrides`` (small changes) or ``--create-config-only``,
+   which writes both ``resolved_configs.json`` and ``experiment_config.py``; copy
+   both to your checkpoint directory (large changes), or inference runs the old
+   recipe's hook against the new configs. See :doc:`/user_guide/configuration`.
+
+Training Configuration
+----------------------
+
+Common configuration options:
+
+.. code-block:: bash
+
+   python protomotions/train_agent.py \
+       --robot-name g1 \
+       --simulator isaaclab \
+       --experiment-path examples/experiments/mimic/mlp.py \
+       --experiment-name my_experiment \
+       --motion-file data/motion_for_trackers/g1_random_subset_tiny.pt \
+       --num-envs 4096 \
+       --batch-size 16384 \
+       --ngpu 1 \
+       --training-max-steps 10000000
+
+Config Overrides
+~~~~~~~~~~~~~~~~
+
+Use ``--overrides`` to modify config values at runtime:
+
+.. code-block:: bash
+
+   --overrides "agent.num_mini_epochs=4" "env.max_episode_length=500"
+
+**Supported override format:** ``config_type.field.subfield=value``
+
+Supported config types: ``env``, ``simulator``, ``robot``, ``agent``, ``terrain``, ``motion_lib``, ``scene_lib``
+
+**Values:** the right-hand side is read as a Python literal and then checked
+against the type the target field declares. Scalars (``int``, ``float``,
+``bool``, ``str``), ``None``, and list or tuple literals are accepted, and a
+dict literal fills a field whose type is a dataclass. Text that is not a valid
+literal is kept as a string. A value of the wrong type, or a field name the
+config does not declare, is refused while the configs are assembled, before any
+simulator or environment is created, with an error that names the field.
+
+.. code-block:: bash
+
+   --overrides "env.max_episode_length=500" \
+       'robot.contact_bodies=["left_ankle_roll_link","right_ankle_roll_link"]'
+
+Write a list of robot bodies with the robot's own body names, as in this G1
+example.
+
+**Limitations:** an override sets one field at a time. A change that touches
+several components at once, such as a new reward term or a different
+observation set, belongs in a new experiment file. That is also good practice
+for managing and tracking different experiment configurations.
+
+See :doc:`../user_guide/configuration` for more details on the configuration system.
+
+Logging with Weights & Biases
+-----------------------------
+
+First, set up wandb authentication:
+
+.. code-block:: bash
+
+   wandb login
+
+Then enable experiment tracking:
+
+.. code-block:: bash
+
+   python protomotions/train_agent.py \
+       ... \
+       --use-wandb \
+       --wandb-project my_project
+
+The default W&B project is ``physical_animation``.
+
+Key metrics to monitor:
+
+* ``eval/gt_error/mean`` - Mean position tracking error in the mimic MLP recipe.
+  Metric names come from the experiment's evaluator config.
+* ``eval/success_rate`` - Fraction of evaluated trials passing the configured
+  failure rules, not necessarily the fraction of motions completed without falling.
+* ``info/episode_reward`` - Training reward (affected by prioritized sampling).
+* ``actor/clip_frac`` - Fraction of samples whose PPO probability ratio is clipped.
+* ``actor/grad_norm_before_clip`` / ``critic/grad_norm_before_clip`` - Gradient
+  magnitudes before clipping.
+
+.. tip::
+
+   Weights & Biases has many useful features beyond basic metric plots. You can search 
+   and filter runs by any config parameter, compare runs side-by-side, and create custom 
+   dashboards. Spend some time exploring the UI to get the most out of experiment tracking.
+
+Evaluation
+----------
+
+Evaluate a trained agent:
+
+.. code-block:: bash
+
+   # Evaluate G1 pretrained model
+   python protomotions/inference_agent.py \
+       --checkpoint data/pretrained_models/motion_tracker/g1-bones-deploy/inference_last.ckpt \
+       --motion-file data/motion_for_trackers/g1_bones_seed_mini.pt \
+       --simulator isaaclab
+
+   # Evaluate SOMA pretrained model
+   python protomotions/inference_agent.py \
+       --checkpoint data/pretrained_models/motion_tracker/soma-bones/inference_last_lab.ckpt \
+       --motion-file data/motion_for_trackers/soma23_bones_seed_mini.pt \
+       --simulator isaaclab
+
+   # Or evaluate your own trained model. Pass a motion file made for the robot
+   # you trained, or omit --motion-file to reuse the training motion file.
+   python protomotions/inference_agent.py \
+       --checkpoint results/my_experiment/last.ckpt \
+       --motion-file data/motion_for_trackers/g1_random_subset_tiny.pt \
+       --simulator isaaclab
+
+Keyboard Controls
+~~~~~~~~~~~~~~~~~
+
+During visualization:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 90
+
+   * - Key
+     - Description
+   * - ``J``
+     - Apply physical force to all robots (test robustness)
+   * - ``R``
+     - Reset the task
+   * - ``O``
+     - Toggle camera (cycles through entities)
+   * - ``L``
+     - Toggle video recording
+   * - ``Q``
+     - Quit
+
+Next Steps
+----------
+
+* :doc:`amass_preparation` - Prepare AMASS motion data
+* :doc:`../tutorials/index` - End-to-end workflow tutorials
+* :doc:`../concepts/index` - Understand core abstractions
+* :doc:`../user_guide/configuration` - Configuration system deep dive

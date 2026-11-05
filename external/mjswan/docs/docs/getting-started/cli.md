@@ -1,0 +1,198 @@
+---
+icon: octicons/terminal-16
+---
+
+# Command-line interface
+
+`pip install mjswan` exposes a single Typer-based command:
+
+```bash
+mjswan --help
+```
+
+| Subcommand | Purpose |
+|---|---|
+| [`mjswan view`](#mjswan-view) | Build and launch a viewer for a MuJoCo XML / MJCF file |
+| [`mjswan serve`](#mjswan-serve) | Serve a pre-built `dist/` directory, or a `.swn` document |
+| [`mjswan new`](#mjswan-new) | Scaffold a new project from a template |
+| [`mjswan demo`](#mjswan-demo) | List the built-in demos, or run one |
+| [`mjswan info`](#mjswan-info) | Show a tree of projects / scenes / MDPs / policies and asset sizes, for a `dist/` or a `.swn` |
+| [`mjswan publish`](#mjswan-publish) | Upload a built `dist/` or a `.swn` to mjswan Cloud |
+| [`mjswan skin map`](#mjswan-skin-map) | Draft a skin's bone maps against a robot, as a `SkinConfig` to check |
+| [`mjswan login`](#mjswan-login-whoami-logout) | Sign in to mjswan Cloud via GitHub |
+| [`mjswan whoami`](#mjswan-login-whoami-logout) | Show the signed-in account |
+| [`mjswan logout`](#mjswan-login-whoami-logout) | Remove the stored session |
+| [`mjswan version`](#mjswan-version) | Print the installed mjswan version (also `mjswan --version`) |
+
+## `mjswan view`
+
+```bash
+mjswan view <model.xml> [--name SCENE] [--port 8080] [--host localhost] [--no-open]
+```
+
+Build a temporary app around the supplied MuJoCo XML/MJCF file and launch a local viewer.
+
+| Option | Default | Description |
+|---|---|---|
+| `<model>` | — | Path to a MuJoCo XML / MJCF file. |
+| `--name` | `Scene` | Display name shown in the viewer. |
+| `--port` | `8080` | HTTP server port. |
+| `--host` | `localhost` | HTTP bind address. |
+| `--no-open` | `false` | Do not open the browser automatically. |
+
+The build is written to a temporary directory and discarded when the server exits.
+
+## `mjswan serve`
+
+```bash
+mjswan serve <dist-dir | document.swn> [--port 8080] [--host localhost] [--no-open] [--height 600]
+```
+
+Serve a pre-built `dist/` directory with the COOP/COEP headers set. Use this to re-launch an app you previously built with `builder.build()`.
+
+A `.swn` works too. A document holds the simulation but no engine, so mjswan expands it into a
+temporary directory, lays the packaged engine over it and serves that; the directory goes away when
+the command exits. A document built with custom-TS MDP terms is refused, since their runtime module
+ships with the engine rather than in the document — serve its built directory instead.
+
+| Option | Default | Description |
+|---|---|---|
+| `<dist-dir \| document.swn>` | — | A built mjswan `dist/` directory, or a `.swn` document. |
+| `--port` | `8080` | HTTP server port. |
+| `--host` | `localhost` | HTTP bind address. |
+| `--no-open` | `false` | Do not open the browser automatically. |
+| `--height` | `600` | Colab iframe height in pixels (ignored outside Colab). |
+
+## `mjswan new`
+
+```bash
+mjswan new <name> [--template hello-world|policy|mjlab]
+```
+
+Scaffold a new mjswan project in a directory named `<name>`.
+
+| Template | What you get |
+|---|---|
+| `hello-world` (default) | A `main.py` that builds a single scene from `model.xml` and a minimal `model.xml`. |
+| `policy` | The hello-world template plus an `add_policy(name="Policy", policy=...)` call expecting a `policy.onnx` file alongside `main.py`, and the scene's `control_dt` set to `0.02` s: change it to the rate your policy was trained at, and give `add_policy` the observations and actions your network uses ([policy config](../guides/policy-config.md)). |
+| `mjlab` | A one-line `mjswan.Builder.from_mjlab("go2_flat").build()` script, the task id a placeholder to replace. Needs the [`mjlab`](../guides/mjlab.md) extra (`pip install 'mjswan[mjlab]'`). |
+
+After scaffolding:
+
+```bash
+cd <name>
+python main.py
+```
+
+## `mjswan demo`
+
+```bash
+mjswan demo [name]
+```
+
+With no name it lists the bundled demos; with one it runs that demo. They live under
+`examples/`, which the wheel does not ship, so this needs mjswan installed in editable
+mode from a clone (`uv sync`, or `pip install -e .`): the command runs the checkout mjswan
+was installed from, whatever the current directory. They fetch what they show (from
+mjlab, from the Hugging Face Hub, or from upstream): Hub downloads are cached for later
+runs, while `mujoco` fetches MuJoCo's gallery at the `3.11.0` tag again each time.
+
+| Demo | Source | Needs |
+|---|---|---|
+| `main` | `examples/demo/main.py`, the demo deployed to GitHub Pages | `mjswan[demo]` (`hf`, `mjlab` and `wbc-mjlab`) |
+| `simple` | `examples/demo/simple.py`, one mjlab task, one checkpoint | `mjswan[hf,mjlab]` |
+| `mujoco` | `examples/demo/mujoco_models.py`, MuJoCo's `<replicate>` gallery, no policy | core only |
+
+The bare command lists rather than running one, because each of these downloads.
+
+## `mjswan info`
+
+```bash
+mjswan info <dist-dir | document.swn>
+```
+
+Print a tree summary of a built `dist/` directory or a `.swn` document: projects, scenes
+(with `.mjz`/`.mjb` size), each scene's skins (with a VRM's license), MDPs (with their
+traced graph count) and policies (with `.onnx` size). Useful for spotting which assets
+are pushing your build toward the GitHub Pages 1 GB limit.
+
+Example output:
+
+```
+mjswan app: dist  v0.11.0, format 2
+├── My Robots  [my_robots]
+│   └── G1  g1/scene.mjz  (3.2 MB)
+│       ├── MDP: mdp_0  3 graph(s)
+│       └── Policy: Locomotion  mdp=mdp_0  (1.1 MB)
+└── Total scene+policy assets: 4.3 MB
+```
+
+## `mjswan publish`
+
+```bash
+mjswan publish <dist-dir | document.swn> [--title TITLE] [--description TEXT] [--tag TAG]... \
+                                         [--token TOKEN] [--api-base URL]
+```
+
+Upload a built `dist/` directory's data files, or a `.swn` document, to
+[mjswan Cloud](../guides/publishing.md) and print the resulting simulation URL. Only the
+simulation document travels — `manifest.json`, the scene/policy/motion/splat assets and
+traced graphs — never the compiled JavaScript, since Cloud renders them with its own copy
+of the engine. A `.swn` uploads exactly the file set its directory would.
+
+| Option | Default | Description |
+|---|---|---|
+| `<dist-dir>` | — | A built mjswan `dist/` directory, or a `.swn` written by `app.save_document()`. |
+| `--title` | first project's name | Simulation title. |
+| `--description` | — | Optional description. |
+| `--tag` | — | Tag to attach. Repeatable. |
+| `--token` | `$MJSWAN_TOKEN` | Access token, for CI. Skips the interactive login. |
+| `--api-base` | `$MJSWAN_API_BASE`, then `https://api.mjswan.com` | Cloud API base URL. |
+
+If you are not signed in and no token is supplied, the browser login runs first
+automatically. Builds that use custom-TS MDP terms are rejected: Cloud cannot
+execute author-supplied code. A VRM skin only its author, or someone they licensed, may
+use as an avatar is sent only once you answer that you are; see
+[Skins](../guides/publishing.md#skins).
+
+## `mjswan skin map`
+
+```bash
+mjswan skin map <file.vrm | file.glb> [--robot <model.xml | model.mjb | mjlab task id>] [-o draft.py]
+```
+
+Draft the maps a [`SkinConfig`](../api/core.md#skinconfig) needs, for you to check line by
+line. For a `.glb`, `humanoid` is read from the skeleton's shape: the hips are the joint
+two mirrored chains reaching the floor hang from, the spine its chain toward the head,
+and the arms the mirrored pair reaching farthest to the side (a four-legged animal's
+front legs). With `--robot`, `bones` is read from the robot's body names (a G1's
+`hip_pitch`, `hip_roll` and `hip_yaw` links give its yaw), and a `.glb`'s `scale` from
+the robot's size. Chains no bone takes are offered as `springs`, and a skeleton that is
+neither humanoid nor four-legged gets its floor-reaching chains as `limbs` candidates.
+
+`rest_pose` is not guessed: a robot's link origins sit off the joints they look like, so
+a solved T-pose comes out degrees wrong. The command lists the keyframes and each arm
+joint with its axis, offers a four-legged robot's first keyframe, and writes the T-pose
+of the robots checked by hand (mjlab's Unitree G1). `-o` writes the draft as a script
+defining `SKIN`.
+
+## `mjswan login` / `whoami` / `logout`
+
+```bash
+mjswan login [--no-open]   # GitHub OAuth over a loopback redirect
+mjswan whoami              # print the signed-in account
+mjswan logout              # remove the stored session
+```
+
+`--no-open` prints the authorization URL instead of opening a browser — useful over SSH.
+The session is stored locally; `mjswan whoami` exits non-zero when there is none, or when
+one exists locally but is no longer valid server-side.
+
+## `mjswan version`
+
+```bash
+mjswan version
+mjswan --version
+```
+
+Print the installed mjswan version, e.g. `mjswan 0.11.3`.

@@ -1,0 +1,275 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""RLFT a PEFT-adapted GPC prior for steering with AMP rewards."""
+
+import argparse
+
+from examples.experiments.gpc.prior_context import nearest_surface_obs_params
+from protomotions.envs.presets import tracking_playback
+from protomotions.utils.experiment_configs import ExperimentConfigs
+from protomotions.envs.base_env.config import EnvConfig
+from protomotions.robot_configs.base import RobotConfig
+from protomotions.simulator.base_simulator.config import SimulatorConfig
+
+PRIOR_CHECKPOINT = "data/pretrained_models/gpc_prior/soma_bones/inference_last.ckpt"
+
+DISC_HISTORY_STEPS = [1, 2, 4, 8, 16]
+
+
+def additional_experiment_arguments(parser: argparse.ArgumentParser):
+    parser.add_argument("--prior-checkpoint", default=PRIOR_CHECKPOINT)
+
+
+def configure_robot_and_simulator(
+    robot_cfg: RobotConfig, simulator_cfg: SimulatorConfig, args: argparse.Namespace
+):
+    robot_cfg.update_fields(contact_bodies=None)
+
+
+def terrain_config(args: argparse.Namespace):
+    from protomotions.components.terrains.config import TerrainConfig
+
+    return TerrainConfig()
+
+
+def scene_lib_config(args: argparse.Namespace):
+    from protomotions.components.scene_lib import SceneLibConfig
+
+    scene_file = args.scenes_file
+    return SceneLibConfig(scene_file=scene_file)
+
+
+def motion_lib_config(args: argparse.Namespace):
+    from protomotions.components.motion_lib import MotionLibConfig
+
+    return MotionLibConfig(motion_file=args.motion_file)
+
+
+def env_config(robot_cfg: RobotConfig, args: argparse.Namespace) -> EnvConfig:
+    from protomotions.envs.action import make_pd_action_config
+    from protomotions.envs.obs.steering import compute_steering_obs
+    from protomotions.envs.obs.nearest_surface_obs import (
+        compute_nearest_surface_vectors,
+    )
+    from protomotions.envs.mdp_component import MdpComponent
+    from protomotions.envs.obs.humanoid import (
+        compute_humanoid_max_coords_observations,
+    )
+    from protomotions.envs.obs.humanoid_historical import (
+        compute_historical_max_coords_from_state,
+    )
+    from protomotions.envs.rewards.meta import RewardMeta
+    from protomotions.envs.rewards.task import compute_heading_velocity_rew
+    from protomotions.envs.control.steering_control import SteeringControlConfig
+    from protomotions.envs.motion_manager.config import MimicMotionManagerConfig
+
+    observation_components = {
+        "max_coords_obs": MdpComponent.from_kernel(
+            compute_humanoid_max_coords_observations
+        ),
+        "task_obs": MdpComponent.from_kernel(compute_steering_obs),
+        "historical_max_coords_obs": MdpComponent.from_kernel(
+            compute_historical_max_coords_from_state,
+            history_steps=DISC_HISTORY_STEPS,
+        ),
+        "nearest_surface": MdpComponent.from_kernel(
+            compute_nearest_surface_vectors,
+            **nearest_surface_obs_params(
+                robot_cfg, with_objects=args.scenes_file is not None
+            ),
+        ),
+    }
+
+    return EnvConfig(
+        ref_contact_smooth_window=7,
+        max_episode_length=256,
+        reset_grace_period=5,
+        ref_respawn_offset=0.0,
+        control_components={
+            "steering": SteeringControlConfig(
+                tar_speed_min=1.2,
+                tar_speed_max=4.0,
+                heading_change_steps_min=40,
+                heading_change_steps_max=150,
+                random_heading_probability=0.2,
+                standard_heading_change=1.57,
+                standard_speed_change=0.3,
+                stop_probability=0.05,
+                enable_rand_facing=True,
+            ),
+        },
+        observation_components=observation_components,
+        reward_components={
+            "steering": MdpComponent.from_kernel(
+                compute_heading_velocity_rew,
+                meta=RewardMeta(weight=1.0),
+            ),
+        },
+        action_config=make_pd_action_config(robot_cfg),
+        motion_manager=MimicMotionManagerConfig(
+            init_start_prob=0.2,
+            resample_on_reset=True,
+        ),
+    )
+
+
+def agent_config(
+    robot_config: RobotConfig,
+    env_config: EnvConfig,
+    args: argparse.Namespace,
+):
+    from protomotions.agents.amp.config import AMPParametersConfig, DiscriminatorConfig
+    from protomotions.agents.base_agent.config import OptimizerConfig
+    from protomotions.agents.common.config import (
+        MLPWithConcatConfig,
+        MLPLayerConfig,
+        ModuleContainerConfig,
+        PretrainedModelConfig,
+    )
+    from protomotions.agents.evaluators.config import EvaluatorConfig
+    from protomotions.agents.peft.prior_amp_config import (
+        DiscretePriorPEFTRLFTAMPAgentConfig,
+        DiscretePriorPEFTRLFTAMPModelConfig,
+    )
+    from protomotions.agents.peft.prior_config import (
+        DiscretePriorPEFTConfig,
+        DiscretePriorPEFTActorConfig,
+    )
+    from protomotions.envs.mdp_component import MdpComponent
+    from protomotions.envs.obs.humanoid_historical import (
+        compute_historical_max_coords_from_motion_lib,
+    )
+
+    prior_checkpoint = args.prior_checkpoint
+    actor_in_keys = ["task_obs"]
+
+    discriminator_config = DiscriminatorConfig(
+        in_keys=["historical_max_coords_obs"],
+        out_keys=["disc_logits"],
+        models=[
+            MLPWithConcatConfig(
+                in_keys=["historical_max_coords_obs"],
+                out_keys=["disc_logits"],
+                normalize_obs=True,
+                norm_clamp_value=5,
+                num_out=1,
+                layers=[
+                    MLPLayerConfig(units=1024, activation="relu") for _ in range(3)
+                ],
+            )
+        ],
+    )
+    disc_critic_config = ModuleContainerConfig(
+        in_keys=["max_coords_obs", "historical_max_coords_obs"],
+        out_keys=["disc_value"],
+        models=[
+            MLPWithConcatConfig(
+                in_keys=["max_coords_obs", "historical_max_coords_obs"],
+                out_keys=["disc_value"],
+                normalize_obs=True,
+                norm_clamp_value=5,
+                num_out=1,
+                layers=[
+                    MLPLayerConfig(units=1024, activation="relu") for _ in range(3)
+                ],
+            )
+        ],
+    )
+
+    num_mini_epochs = 2
+    discriminator_batch_size = max(1, args.batch_size // num_mini_epochs)
+
+    return DiscretePriorPEFTRLFTAMPAgentConfig(
+        pretrained_modules={
+            "prior": PretrainedModelConfig(
+                checkpoint_path=prior_checkpoint,
+                module_path="",
+            ),
+        },
+        e_clip=0.2,
+        tau=0.95,
+        model=DiscretePriorPEFTRLFTAMPModelConfig(
+            in_keys=["max_coords_obs", "task_obs", "historical_max_coords_obs"],
+            out_keys=[
+                "action",
+                "mean_action",
+                "neglogp",
+                "prior_tokens",
+                "value",
+                "disc_logits",
+                "disc_value",
+            ],
+            actor=DiscretePriorPEFTActorConfig(
+                in_keys=actor_in_keys,
+                peft=DiscretePriorPEFTConfig(
+                    peft_type="dora",
+                    rank=32,
+                    alpha=64,
+                    temperature=1.0,
+                    top_p=0.99,
+                    sampling_mode="prior_constraint",
+                    prior_top_p=0.99,
+                    kl_coeff=0.0,
+                ),
+            ),
+            critic=MLPWithConcatConfig(
+                in_keys=["max_coords_obs", "task_obs"],
+                out_keys=["value"],
+                normalize_obs=True,
+                norm_clamp_value=5,
+                num_out=1,
+                layers=[
+                    MLPLayerConfig(units=1024, activation="relu") for _ in range(4)
+                ],
+            ),
+            actor_optimizer=OptimizerConfig(
+                _target_="torch.optim.AdamW",
+                lr=1e-4,
+                weight_decay=0.01,
+            ),
+            critic_optimizer=OptimizerConfig(_target_="torch.optim.AdamW", lr=1e-4),
+            discriminator=discriminator_config,
+            disc_critic=disc_critic_config,
+            discriminator_optimizer=OptimizerConfig(
+                _target_="torch.optim.AdamW", lr=1e-4
+            ),
+            disc_critic_optimizer=OptimizerConfig(
+                _target_="torch.optim.AdamW", lr=1e-4
+            ),
+        ),
+        batch_size=args.batch_size,
+        training_max_steps=args.training_max_steps,
+        num_steps=32,
+        num_mini_epochs=num_mini_epochs,
+        normalize_rewards=True,
+        gradient_clip_val=25.0,
+        save_last_checkpoint_every=10,
+        evaluator=EvaluatorConfig(eval_metrics_every=100),
+        amp_parameters=AMPParametersConfig(
+            discriminator_batch_size=discriminator_batch_size,
+            discriminator_reward_w=0.1,
+            discriminator_reward_threshold=0.02,
+        ),
+        reference_obs_components={
+            "historical_max_coords_obs": MdpComponent(
+                compute_func=compute_historical_max_coords_from_motion_lib,
+                dynamic_vars={},
+                static_params={
+                    "history_steps": DISC_HISTORY_STEPS,
+                },
+            )
+        },
+    )
+
+
+def apply_inference_overrides(
+    configs: ExperimentConfigs, args: argparse.Namespace
+) -> None:
+    """Play each clip to its end; don't let the discriminator gate the reward.
+
+    This agent carries amp_parameters but is not an AMPAgentConfig, so the
+    discriminator threshold is a recipe line here, not a framework default.
+    """
+    tracking_playback(configs.env)
+    configs.agent.amp_parameters.discriminator_reward_threshold = 0.0

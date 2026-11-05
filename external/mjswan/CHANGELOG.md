@@ -1,0 +1,1336 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+API-wide rename for consistency: `add_[layer]_[source]` for methods that add an
+object, `enable_`/`set_` for toggles, spelled-out MDP binding names. The pre-0.8
+names are gone with this release (see Removed), as are the velocity-command
+shortcuts.
+
+### Added
+
+- **`createEngine(element, { archive })`, for a host that renders `.mjz` archives it did not
+  build.** `archive: { maxEntries, maxInflatedBytes, extensions }` refuses an archive before
+  MuJoCo compiles it when it holds more files, inflates to more bytes, or holds a file whose
+  name is not a safe path ending in one of `extensions`. The bytes are counted as each file
+  inflates, not read from the archive's directory, and the name checked is the one the file
+  is written under (its local header's, or the Unicode path in its directory record), so a
+  forged directory does not get past it. Without the option, an archive unpacks as before.
+- **Per-frame data on a motion, and motion groups** (**document format 8**).
+  `add_motion(frame_fields=[...])` (and `add_motion_wandb` / `add_motion_hf`) names extra
+  arrays of the clip's `.npz`, each one row per frame, that the browser's
+  `TrackingCommand` serves as state fields of their own name at the current reference
+  frame, so a traced term can read data that depends only on the clip and the frame
+  (a motion encoder's latent, say) off `env.command_manager.get_term("motion")` like any
+  other field, and the viewer's motion selector picks the clip. The build checks each
+  array against the clip's frame count, and refuses a policy whose graphs read a field
+  the command neither computes nor finds in every one of its motions' `frame_fields`.
+  `group="..."` lists a motion under a heading in the selector; `PolicyEntry.motions`
+  carries it. A format-7 engine would serve no frame field and freeze the graph reading
+  one.
+- **Handles that move the preview** (ADR 0011). `preview.show({ ..., handles: 'move' })`
+  draws an arrow along each of the world's axes from the geom's centre; dragging one moves
+  the geom along it, its size and turn left alone, and `preview.onChange` reports it as it
+  does a resize or a turn.
+- **Handles on the preview, and a pick that names the geom** (ADR 0011). `preview.show`
+  takes `handles: 'size'`, arrows along the geom's own axes that resize it as they are
+  dragged (the opposite face stays, and the bottom where a radius sets the height), or
+  `handles: 'turn'`, rings that turn it (Shift snaps to 15 degrees), both drawn a fixed
+  size on screen. A press on a handle is the handle's; any other still orbits the camera.
+  `preview.onChange(listener)` reports each change and the release, `preview.hit(x, y)`
+  says whether the preview is under a point, and `replaces: geom` hides a geom of the model
+  while the preview stands in for it. `PickHit` now carries the geom's `name`, `type`,
+  `size`, `rgba` as drawn, and its `pos` and `quat` now.
+- **`engine.pick` and `engine.preview`, for a host that places geoms by pointing** (ADR
+  0011). `pick(clientX, clientY)` casts MuJoCo's own ray from the camera through a point of
+  the canvas and returns the surface it meets (point and normal in MuJoCo axes, the geom
+  and its body), the floor's infinite plane included and anything only drawn left out.
+  `preview.show({ type, size, pos, quat?, rgba? })` draws one primitive geom over the scene,
+  never simulated, built as the model's geoms are; `preview.hide()` removes it.
+- **Credits in the viewer.** The About dialog (the control panel's logo, or the new `I`
+  key, which works with the panel hidden) has a **Credits** tab listing the scene in
+  view: each third-party component with its license, its `NOTICE` in full and the license
+  text on demand; every skin of the scene, the one on screen first, a VRM by its own
+  `meta`; the work's own license; and the engine's, with `THIRD_PARTY_LICENSES.md`. The
+  logo shows a hover background. The manifest names
+  the license files the build writes, since a static host lists no directory: a
+  project's `work` and a scene's `credits` (each file's `spdx`, `restriction` and
+  `copyright` line, and a summary of each VRM skin's `meta`), optional keys an older
+  engine ignores, so `format` stays 7. `mjswan/manifest` exposes them as
+  `ProjectCatalog.work` and `SceneEntry.credits`, fetching a text only when asked.
+  `mjswan.license.copyright_line` reads a license text's holder line.
+- **Skins: a rigged character drawn over the robot** (ADR 0010, **document format 7**).
+  `SceneHandle.add_skin(name, mjswan.SkinConfig(...))` adds a `.vrm` or a `.glb` to the
+  scene's **Skin** menu, posed every frame from the robot's bodies while physics,
+  collision and the policy stay the robot's; `?skin=<id>` opens on one, `?skin=` on
+  none. The file is bundled as received, so a VRM's license travels with it; a `.gltf`,
+  a file pointing outside itself, or a compressed one (Draco, meshopt, KTX2/Basis) is
+  refused with how to export it again. A VRM names its own bones; a `.glb` is mapped by
+  `humanoid` (VRM bone to node name, or the `"mixamo"` preset; a four-legged animal's
+  front legs as arms) or by node name with `limbs`, and `reparent` hangs a node from
+  another, for feet IK controls carry. `rest_pose` (a keyframe or a few joints) is the
+  robot's pose while the character rests; the build measures the rest offsets, root
+  height and hips placement from it. `retarget="hybrid"`, the default, turns each bone
+  as its body has, then bends each limb so the hand or foot lands on the robot's. A
+  `.glb` takes `scale`, `facing`, `springs` (`SpringChain`, `SpringCollider`), toon
+  `material` (`ToonShading`), and `license` / `notice` as a component's. Spring bones
+  swing by three-vrm, or with `mujoco_springs` in a MuJoCo model of their own. The robot
+  is undrawn by default; Debug Viz's **Xray** switch (`?xray=1`) draws it see-through
+  over the character. `mjswan publish` refuses a VRM whose license forbids
+  redistribution, asks before sending one only its author or someone they licensed may
+  use, and warns on one for non-commercial use. `mjswan skin map <file> --robot <...>`
+  drafts the maps as a `SkinConfig` to check, and `mjswan info` lists each skin with its
+  license. The demo's Showcase gains **Humanoid skins** (six VRM avatars on WBC-Mjlab's
+  G1, tracking any of its clips) and **Quadruped skins** (three of Quaternius's animals
+  on the Go1 on rough terrain), every skin fetched from the Hub's `skins/`.
+- **`ProjectHandle.add_scene_mjlab(name=...)`** names the scene other than by its task
+  id; the scene's id, and so its `?scene=` value, follow the name.
+- **A `demo` extra**: what `examples/demo/main.py` imports (`hf`, `mjlab` and
+  `wbc-mjlab`, which registers WBC-Mjlab's tasks).
+- **A task's own action class runs in the browser** (ADR 0009, **document format 6**). An
+  mjlab action class mjswan has no class of its own for, such as in-hand rotation's
+  `JointPositionDeltaAction` or luwu's `HeldJointPositionAction`, was skipped with a
+  warning. The build now traces its `process_actions` and `reset` to ONNX, its state
+  carried between control steps as a traced command's is, and checks both graphs against
+  the term's own code before they ship. Its `apply_actions` stays native: one inherited
+  from mjlab's position, relative, velocity or effort action needs nothing, and one that
+  overrides it is named with `mjswan.register_action(cfg_name, mjswan.ActionBinding(...))`:
+  a target kind, a ramp across the substeps (`interpolate`) or a hold of the measured pose
+  after a reset (`hold_s`), both of a position target. The build looks the binding up, so
+  `register_action` may come before or after `add_policy`, or again after it. A body a
+  graph cannot reproduce fails the build with the fix in the message: Python state (a
+  counter, an attribute made in the body, a deque of past actions), a write to the sim or
+  to an entity's buffers, two state fields that share one tensor, a live mjlab object
+  cached at init (the entity's data, the scene, the sim), a field the browser's slot
+  reader does not serve, or a reset that reads the episode clock. One of mjlab's own
+  classes mjswan has none of, such as `DifferentialIKActionCfg`, is still skipped with a
+  warning.
+
+- **`RelativeJointPositionActionCfg`** (`joint_position_relative`): the target is the
+  measured joint position plus `scale * a`, read every substep, as mjlab's
+  `RelativeJointPositionAction` does.
+
+- **mjlab's actuator command delay runs in the browser**, for every kind of term. The
+  build reads `delay_min_lag`, `delay_max_lag`, `delay_hold_prob`, `delay_update_period`
+  and `delay_per_env_phase` off the actuator configs, and no longer warns about them. A
+  term's joints share one lag where mjlab fuses their actuators behind one delay buffer
+  (same class and setting); a term's own `delay` is left as set. A random lag on joints
+  of two action terms warns: mjlab draws one lag for them, the browser one per term.
+
+- **An observation can read an action term's internals**, `get_term(name).<field>`: a
+  traced term's state, or any term's `_processed_actions`, through the new
+  `{action_term, field}` input slot, which the browser feeds as float32. Any other
+  internal, or a property that reads the term's entity, fails the build, since the
+  browser holds no copy of it.
+
+- **`mjswan version` and `mjswan --version`** print the installed mjswan version.
+
+- **`CommandJointPositionActionCfg` drives joints from a command** (`joint_position_command`).
+  The target is `scale * c + offset`, with `c` the value of command `command_name`, one
+  column per matched actuated joint in the model's joint order. It takes no column of the
+  policy's output, so its joints need not be the policy's: a locomotion policy keeps the
+  legs while the panel's sliders or a scripted motion move the arms.
+
+- **A traced command can read another command.** `env.command_manager.get_command()` and
+  `get_term(...).<field>` inside `_resample_command` / `_update_command` become
+  `{command, field}` input slots, served from that command's state as an observation's
+  are. The browser serves that state as float32, so a flag such as `is_standing_env`
+  crosses as 0 or 1 and is cast back inside the graph.
+
+- **`JointVelocityActionCfg` runs in the browser** as the `joint_velocity` control type.
+  The target `scale * a + offset` is a velocity actuator's `ctrl`, and a motor gets
+  `damping * (target - qvel)`. An mjlab task needs no extra argument: the default offset
+  comes from the entity's `init_state.joint_vel`, a motor's damping from its
+  `IdealPdActuatorCfg`. A wheeled robot that drives its wheels by velocity now ports.
+
+- **The control panel reproduces mjlab's viewer Scene section, and its Debug Viz draws
+  what mjlab's does.** The build records the section from mjlab's own
+  `MjlabViserScene.create_scene_gui` and ships it as the manifest's `viewer_gui`:
+  **Camera** (Track camera, FOV) and **Debug Viz** (Enabled, All envs, one switch per
+  drawing). All envs is shown disabled, since the browser runs one env. A build without
+  mjlab has no Scene section.
+
+  Debug Viz lists every drawing mjlab's viewer lists, in its order and with its labels:
+  command terms (the velocity arrows, the tracking ghost or, with `viz.mode="frames"`,
+  the reference and robot body frames), raycast sensors with `debug_vis` (a sphere at
+  each hit, plus rays and surface normals when the sensor's `viz` asks), and the
+  `upright` reward (fitted terrain normal and body up). The MDP entry's new `debug_vis`
+  block carries the sensors and reward terms; a reward drawing mjswan does not know warns
+  at build time. Arrows take viser's shape: a cone twice the shaft's width, drawn opaque.
+
+  For a host's own UI: `engine.debugVis.setEnabled(enabled)` and `state.debugVisEnabled`
+  (the Enabled switch, also `?debug=0` in the app), `engine.debugVis.set(id, enabled)` with
+  ids `command:<term>`, `sensor:<name>`, `reward:<term>`, `engine.camera.setTracking`,
+  and `state.camera` (`tracking`, `fovy`). `RaycastSensor` also serves `normals_w`.
+
+- **WebXR entry through the engine API**: `engine.xr` (`enter(id)`, `exit()`,
+  `setHandTracking(enabled)`), `state.xrSessions` and `state.handTracking`. The host draws
+  its own buttons from `state.xrSessions` and calls `enter` from its click, the gesture the
+  browser requires. The app's control panel gains a collapsed **WebXR** section below
+  **Interact**, shown only where a session can start: **Enter VR**, **Start AR** and the
+  **Hand tracking** switch.
+
+- **Whole MuJoCo models load from the Hugging Face Hub**: `ProjectHandle.add_scene_hf()`
+  beside `add_scene_mjlab`, and `source.hf.fetch_dir()` behind it. A model is rarely one
+  file (the MJCF names meshes MuJoCo resolves relative to it), so the XML's whole
+  directory comes down and the spec is compiled where it lands; `add_scene(spec=…)`'s
+  license detection then finds a `LICENSE` that travelled with it (ADR 0007 §2). The
+  scene is named after its directory when the XML's own stem only names a role
+  (`scene.xml`), and `allow_patterns=` covers a model whose `meshdir` reaches outside
+  its own directory, since nothing parses the XML to find out. An XML at the repository
+  root takes the whole repository.
+
+- **Splat backgrounds load from the Hugging Face Hub**: `SceneHandle.add_splat_hf()`,
+  beside `add_splat`. A splat is the opposite of a scene (one opaque file rather than an
+  MJCF and the meshes it resolves), so this downloads it and hands the local path to
+  `source=`: the `.spz` is bundled into the build as a local one is, and the deployed app
+  needs no network. The placement arguments (`scale`, the offsets, the rotations) describe
+  how *this* capture lines up with *this* model, which no file on the Hub knows, so they
+  stay the caller's. Named after its file, or after the repository when the stem only
+  names a role (`background.spz`).
+- **Policies and motions load from the Hugging Face Hub**: `SceneHandle.add_policy_hf()`,
+  `PolicyHandle.add_motion_hf()`, and `hf_repo_id=` on `Builder.from_mjlab()` /
+  `add_project_mjlab()`, beside their `_wandb` counterparts. The two sources are not
+  symmetric and the code says so: a W&B run holds *training state*, so `add_policy_wandb`
+  rebuilds a live mjlab env and converts every `model_*.pt` with torch; a Hub repository
+  holds the *published artifact*, so `add_policy_hf` downloads the `.onnx` and stops: no
+  checkpoint is converted, so torch is not needed for that, and `task_id` is optional.
+  `huggingface_hub` is the download's one dependency, in its own `hf` extra rather than
+  `examples`; a policy with MDP terms to trace still needs `mjswan[mjlab]`, as it does
+  from any source. With no filename given, `policy.onnx` then `final.onnx` then the
+  repository's single `.onnx`; several unnamed candidates raise rather than pick one. A
+  generic stem such as `policy` is named after its directory (`walk/policy.onnx` is
+  `walk`, passing over folders such as `exported/`), else after the repository.
+
+  What the caller does not pass is filled the way mjlab has it. mjlab's actions are its
+  action terms', one after another, each in the model's **joint** order:
+  `JointPositionAction` resolves `actuator_names` through
+  `Entity.find_joints_by_actuator_names`, which keeps joint order, and on the Unitree G1
+  that is not the actuator block's. So `policy_joint_names` come from the task's own
+  action terms whenever the scene or `env_cfg` has them, and from the export's metadata
+  otherwise (mjlab attaches it from its velocity, manipulation and tracking runners only,
+  so a cartpole checkpoint has none). The metadata lists `robot.joint_names`, so a joint
+  the model does not actuate drops out (mjlab's YAM has eight against seven actions, two
+  fingers ganged into one gripper), and the joint-position term's scale, which mjlab
+  writes once per action, lines up with what remains. It cannot say where a second
+  action term's actions go, so a task with several needs its env config, and metadata
+  describing a different robot warns and fills nothing. `default_joint_pos` is looked up
+  by joint name, in the metadata and then in the scene model's first keyframe, which is
+  mjlab's `init_state`. When nothing names a policy's joints it warns rather than return
+  a policy that drives nothing; one with no joint action term, or a `config_path`
+  sidecar that may carry the names, is left alone.
+- **An mjlab export describes itself, and mjswan now reads it**: `mjlab/onnx_meta.py`
+  parses the `metadata_props` mjlab bakes into an exported policy, so `add_policy_hf`
+  takes `policy_joint_names`, `default_joint_pos` and the joint-position action term from
+  the file where the scene and its `env_cfg` do not already say (see above). Observation
+  terms are never reconstructed; the metadata names them but does not carry the functions
+  mjswan traces. Reading needs no mjlab installed, the encoding being plain strings.
+- **`SceneHandle.actuated_joint_names()`** returns the joint each actuator drives, in
+  actuator order. Useful for seeing what a model actuates; not `policy_joint_names`
+  without thought, since that wants the order the network's actions come out in and an
+  mjlab policy's is joint order.
+- **License files travel with the build**
+  ([ADR 0007](docs/adr/0007-license-files-in-the-build.md)): `<project-id>/LICENSE` /
+  `NOTICE` for the work, via `Builder(license=, copyright=)`, `add_project(license=…)` or
+  `ProjectHandle.set_license()` / `set_notice()` (an SPDX id generates the standard text
+  with its tag, a path is copied verbatim), and `<project-id>/<scene-id>/LICENSE.<component>`
+  / `NOTICE.<component>` per third-party component. `add_scene(spec=…)` detects the latter
+  beside the model and its meshes, `add_scene_mjlab` falls back to a known-assets table by
+  task id, and `SceneHandle.add_attribution()` / `clear_attributions()` declare what has no
+  file (motion clips, weights). `mjswan publish` uploads them as `text/plain`, prints each
+  with its identified license, warns for a restricted one (CC NC / SA / ND, GPL family) and
+  refuses one that forbids redistribution before any network call; `mjswan info` lists
+  them. `manifest.json` and `format` are unchanged; the root `dist/LICENSE` stays the
+  engine's and is never published.
+- **Every term entry says which function it is** ([#118](https://github.com/ttktjmt/mjswan/issues/118)):
+  `func` (`<module>:<qualname>`), `doc` (the docstring's first line) and `params`
+  (JSON-safe: a `SceneEntityCfg` becomes `{entity, joint_names?, …}`) on observation
+  terms, fused-group `layout` rows, terminations and their `lanes`, events, and a
+  command's reset graph; a traced command names its class. Every written `.onnx` also
+  carries `producer_name = "mjswan"`, a `doc_string` and `metadata_props`
+  `mjswan.kind` / `mjswan.term` / `mjswan.func`, so Netron's Model Properties name the
+  source. Additive: the runtime ignores the keys, which exist for readers of the
+  document, mjswan Cloud's inspector first.
+- **The build output is a simulation document**
+  ([ADR 0006](docs/adr/0006-swn-simulation-document.md)): one `manifest.json` at the
+  root — `{format, version, uses_custom_js, plugins?, projects}`, every key `snake_case`
+  — over `<project-id>/<scene-id>/{scene.mjz, mdp/<mdp-id>/…, policy/<policy-id>.onnx,
+  assets/…}`. Every path under a scene entry resolves against the scene directory. The
+  `format` integer versions the layout (an engine refuses a newer document, naming both
+  values); `version` is the release that wrote it, and never a gate.
+- **`.swn`**: the document as one file. `MjswanApp.save_document()` writes the manifest
+  and the project directories — nothing of the engine — as a ZIP of the same tree;
+  `mjswan info`, `mjswan serve`, `mjswan publish` and `publish_dist` accept a `.swn`
+  wherever they take a directory, and a `.swn` publishes exactly the file set its directory
+  would. Serving one expands it beside the packaged engine (`MjswanApp.from_document`) into
+  a temporary app; a custom-JS document is refused, since its plugin module ships with the
+  engine rather than in the document.
+- **`MdpConfig`**: the five term sets a policy runs against — observations, actions,
+  terminations, commands and now **events** — as one object. Policies handed the same
+  `MdpConfig` share one MDP, traced and written once under `mdp/<mdp-id>/`; the term-set
+  kwargs on `add_policy` build an anonymous one, and `add_policy_wandb` builds one per
+  call so a run's checkpoints share it. An MDP built for a single policy takes that
+  policy's id, so `mdp/locomotion/` sits beside `policy/locomotion.onnx`; a shared one is
+  `mdp_0`, `mdp_1`, … per scene in first-use order, and a `name` (`name2id(name)`) wins
+  over both.
+- `add_policy(events=...)`: events belong to the policy's MDP. A scene's `events` /
+  `set_events` are the default for policies that declare none, so an mjlab task's
+  `env_cfg.events` lands where it did before. Switching to a policy with a different MDP
+  restores the model values the previous MDP's startup randomization changed, reseeds the
+  term PRNG from `termSeed`, and runs the new MDP's startup events — so randomization no
+  longer compounds across switches and A → B → A reproduces A's draw.
+- `add_policy(in_keys=..., out_keys=...)`: the network's slot tables, declared beside the
+  network and checked against its input and output counts. A multi-input network without
+  `in_keys` is refused at `add_policy` rather than going inert at playback; a slot naming no
+  observation group fails the build. A multi-*output* network without `out_keys` is warned
+  about instead of refused, naming the output the actuators will be driven from. Written to
+  the manifest only when they differ from the defaults (`["actor"]`, `["action"]`).
+- `add_project(default=True)` and `add_policy(default=True)` pick what the app opens on;
+  two siblings both marked fail the build, none marked means the first added.
+- `mjswan info` lists each scene's MDPs with their traced-graph counts, and reads a
+  `.swn`.
+- `MuscleActivationActionCfg.action_mode` (`sigmoid` / `direct` / `excitation`). `direct`
+  writes the raw action clipped to each actuator's own `ctrlrange`: a myosuite muscle
+  model declares `ctrlrange="-1 1"` and a checkpoint trained against the raw control uses
+  the negative half, which `excitation` clamps to zero. `normalize` stays as the legacy
+  spelling of the other two; the policy JSON carries `mode`, and the engine reads either.
+- **Document format 2.** `input_slots` may now carry a raw `mjData` field (`{"sim": ...}`,
+  with `rows`), which an engine reading format 1 accepts and then cannot serve, freezing
+  the observation group at its previous value. `DOCUMENT_FORMAT` and the engine's
+  `MAX_DOCUMENT_FORMAT` are 2; the guard is a ceiling, so the new engine still reads a
+  format-1 document.
+- **Raw `mjData` fields as graph inputs.** A term reading `entity.data.data.<field>`
+  (mjlab's `SimData` — a muscle model's `act`, the sim `time`) traces to a `sim` slot the
+  browser serves from `mjData`, and an `EntityData` property the browser has no native
+  reader for is traced *through*: mjlab's own property math enters the graph and the raw
+  fields it reads become `sim` slots. Such a term used to build and then freeze its
+  observation group at its previous value; a property that cannot be traced now fails the
+  build. The TypeScript readers remain a shortcut — a property they serve is one value
+  slot with no math in the graph — and now cover all 55 `EntityData` properties rather
+  than 15, under `core/onnx/slotReader/fields/`, one file per section of mjlab's
+  `entity/data.py`. A `sim` slot carries only the `rows` the term indexes where the build
+  can tell which (unioned across a group's terms, whole otherwise), so the graph gathers
+  nothing and a 2038-site model's `site_xmat` costs 17 rows a step rather than all of
+  them. A term may also read `physics_dt` / `step_dt` / `cfg` off the env.
+- `add_policy` fills `policy_num_actions` from the ONNX output width when a policy has no
+  joint names (muscle policies).
+- **MDP term bodies are traced to ONNX at build time and run by ONNX Runtime Web**
+  ([ADR 0005](docs/adr/0005-onnx-traced-terms-superseding-the-declarative-dsl.md)),
+  replacing the hand-written TypeScript DSL (see Removed). mjlab's real
+  observation / termination / event / command functions are exported as graphs, so
+  there is no second copy of the math and no closed primitive set. A term with no
+  browser implementation now fails the build instead of being dropped.
+- Traced-graph coverage for mjlab's structured sensors: `RayCastSensor` (rays cast
+  in the browser, completing `height_scan`) and `ContactSensor`.
+- Seeded PRNG behind every term's randomness (`createEngine({ termSeed })`, reported
+  back as `MjswanEngineState.termSeed`), so a recorded session replays.
+- **WebXR hand tracking as bodies in the simulation** (the **Hand tracking** switch, or
+  `engine.xr.setHandTracking`). A headset can bat a scene's objects around, rest one on an
+  open palm, and pinch to pick one up: a 2 kg box, lifted by friction alone. Opt-in: the
+  bodies go into a scene built from MJCF while the switch is on, at about 1.6x per physics
+  step.
+- **Thumbstick locomotion in VR.** The camera and the tracked hands now hang off an XR
+  rig, which is what a session moves: the left stick slides the viewer along its heading,
+  and the right stick turns it about the head for as long as it is held, at a rate the
+  deflection scales. The rig returns to the origin when the session ends, and the desktop
+  camera comes back to the offset it had. Its height comes from a `mj_ray` cast straight
+  down under the head, so the viewer stands on the ground at their own height and a
+  generated `Rough` terrain no longer buries the view: z = 0 is a generator's base plane,
+  not its surface. Body tracking does not carry a viewer in a session: you arrive beside
+  the tracked body, where the viewer config points the desktop camera, and move yourself
+  from there, so neither the robot's climbing nor an episode reset's teleport to a new
+  spawn patch moves you. A desktop chase camera still follows both, as it did.
+- **Passthrough AR.** A device that supports `immersive-ar` gets a **Start AR** button
+  beside **Enter VR**, and in a see-through session the skybox and the ground planes stop
+  being drawn, so the room shows behind the scene. three.js already clears the framebuffer
+  transparent for an `alpha-blend` blend mode; what covered the room was mjswan's own
+  drawing: a `CubeTexture` background is rendered as a box mesh, and MuJoCo's infinite
+  plane is a full-screen quad. The button is mjswan's rather than three's `ARButton`, which
+  pins the session to the `local` reference space and would leave the floor at eye height.
+- Debug visualisation for command terms, mirroring mjlab's `debug_vis`: a binding's `viz`
+  emits arrows and markers as data, toggled via `engine.debugVis.set`, on by default.
+- **`UniformVelocityCommandCfg` binds to a traced command term in mjswan itself**, so a
+  task built on mjlab's locomotion commands migrates with no registration of its own;
+  `add_scene_mjlab` picks it up from `env_cfg` like any other term. The binding used to
+  live in `examples/mjlab/defaults/commands`, out of reach of other projects.
+  `velocity_command()` stays for a manual control panel on a scene with no mjlab task.
+- `Builder.add_project_mjlab(task_id, ...)`, the instance-method counterpart to the
+  `Builder.from_mjlab` classmethod, for adding an mjlab task to a builder that already
+  has other projects. `from_mjlab` now delegates to it.
+- `ObservationTermCfg.history_steps`: sparse look-back offsets for a term, e.g.
+  `(0, 1, 2, 4, 8, 16)`, where mjlab's `history_length` can only count frames. The
+  runtime now stacks per-term history at all (the build emitted `history_length` and
+  nothing read it).
+- Look-ahead reference slots on the built-in `TrackingCommand`: `ref_root_pos_w`,
+  `ref_root_quat_w`, `ref_joint_pos` (the reference trajectory sampled at the command's
+  `time_steps` offsets) and `is_ready`, for policies trained on a window of the clip.
+- `build_single_entity_trace_env(commands=...)` and `TraceCommandManager`, so a traced
+  term can read a command that exists browser-side only.
+- `ReferenceJointPositionActionCfg` (`joint_position_reference`): joint targets as a
+  motion reference plus a scaled residual, `q_cmd = q_ref(t) + scale * a`. The offset is
+  the tracking command's reference pose and moves every control step, where
+  `JointPositionActionCfg` offsets from a constant default pose. This is the control law
+  a ZEST / BeyondMimic-style tracking policy uses.
+- Anchor-frame reference state fields on `TrackingCommand`: `anchor_lin_vel_w`,
+  `anchor_ang_vel_w`, `ref_base_height`, `ref_base_lin_vel_b`, `ref_base_ang_vel_b`,
+  `ref_gravity_b`, `joint_pos` and `tracked_joint_pos`. Tracking tasks read these off
+  mjlab's `MotionCommand` as properties, which the tracer turns into command slots, so
+  their own functions trace unmodified.
+- **`mode="manual"` event terms, fired from the control panel.** A manual term has no
+  schedule: it runs when the operator presses its button. The panel's new `Events`
+  section draws one button per manual term and one checkbox per `mode="interval"` term,
+  arming or disarming that term's schedule (a disarmed timer stops counting rather than
+  banking the wait, so re-arming cannot fire on the next frame). Both are engine verbs
+  too (`engine.events.fire(name)` / `engine.events.setArmed(name, armed)`), and the terms
+  are reported as `MjswanEngineState.events`; `label` sets the control text, defaulting to
+  the term name. This is mjswan's own mode, not one of mjlab's four: mjlab has a viewer to
+  bolt a button onto and Python state to gate a term with, where a traced graph has
+  neither. A manual term left in an mjlab config is inert there. `disabled_when` names the
+  `mode="interval"` term that owns the same job: while that schedule is armed the button
+  greys out and `fire()` refuses, so a timer and a button never drive it at once. The
+  build refuses a gate that names no interval term of the scene.
+- **`dr.geom_size` is described for the browser**, with the broadphase bounds mjlab
+  recomputes from it: `geom_rbound` and `geom_aabb` follow the new size in the same pass,
+  by geom type (sphere, capsule, ellipsoid, cylinder, box), because a geom that grows
+  while its bound stays as compiled stops colliding at its own surface. Any other geom
+  type fails the build, naming the geoms and their types; mjlab raises the same refusal,
+  but at the first firing.
+- The `mjlab-to-mjswan` agent skill ([skills/mjlab-to-mjswan/](skills/mjlab-to-mjswan/)), published from this repo as the `mjswan` Claude Code plugin (`/mjswan:mjlab-to-mjswan`): it ports one mjlab task from any repo into a browser app.
+- **A `NOTICE` file**, which every build places beside `LICENSE` and the About dialog's
+  Credits tab shows under mjswan. The license stays Apache-2.0; the README now asks
+  commercial use and company pages to keep the swan icon in the control panel and the
+  dialog it opens.
+
+### Changed
+
+- **A camera-like raycast casts each frame's rays in one call.** A raycast sensor whose
+  rays all leave one point per frame, as mjlab's `PinholeCameraPatternCfg` does, is cast
+  with one `mj_multiRay` per frame instead of one `mj_ray` per ray: a call through the
+  binding costs far more than a ray. A G1 head camera's 5,684 rays took 19.5 ms a step and
+  now take 1.3 ms, with the same readings.
+
+- **A traced observation, termination or event graph must compute what its term computes**
+  ([#168](https://github.com/ttktjmt/mjswan/issues/168)). The export records tensor
+  operations only, so a value a body worked out in Python (`.item()`, `bool()` of a tensor,
+  an `if` on a tensor, a counter) was fixed at its trace-time value, and the build
+  succeeded. The build now runs the term's own code on the trace inputs and on perturbed
+  ones, and fails where the graph disagrees, naming the term and, where the tracer warned,
+  the line. A refused read that a `getattr` default or `hasattr` swallowed fails it too,
+  when mjlab's env has the attribute. A graph that draws its own random numbers
+  (`torch.rand` in a body) is not compared, and `env.unwrapped` is the env itself while
+  tracing, as in mjlab. A port that built before may now fail on a term whose browser value
+  was wrong.
+
+- **The browser runs an action term in two halves, as mjlab does**: `process` once per
+  control step, after the policy, and `apply` once per physics substep. It recomputed the
+  whole term every substep. A traced term's process and reset run one at a time, so a
+  reset started mid-step is not lost; one that fails holds its targets, and the terms
+  after it still run.
+
+- **A scene's first reset runs in mjlab's order**: observations, then action terms, then
+  command terms, as every later reset does. The commands reset first. With uniform
+  sampling, a tracking motion's start frame for a given seed changes.
+
+- **`compile.run_parity` fails where the build would**: an observation it cannot trace
+  passes only when it reads nothing (the build bakes it), and an untraceable event only
+  when it is one the build knows has nothing to write. Both used to pass. It traces an
+  author's registered replacement, as the build does, checking it against mjlab's own
+  term, and leaves one bound to a TS class unchecked. It reports a task's own action
+  terms, traced as the build traces them, and serves their state to the observations
+  that read it.
+
+- **mjlab's `last_action` is traced like any other observation**
+  ([#155](https://github.com/ttktjmt/mjswan/issues/155)). Its body reads
+  `env.action_manager.action`, which the tracer serves as an `action` input slot
+  (`{"action": "action"}`) and the browser fills from the policy's last output (after
+  `clip_actions`, zeroed on reset). `last_action(action_name=...)` reads the same slot and
+  slices its term's columns out in the graph. Documents no longer carry the `prev_action`
+  marker, and `run_parity` now checks the term at every step. Any term reading the action
+  vector or a term's `raw_action` traces rather than raising `UnsupportedEnvRead`. A plain
+  scene's trace env has no action terms, so while tracing the build gives it a stand-in of
+  the policy's width (`policy_num_actions`, else `policy_joint_names`). This is
+  **document format 5**, since a format-4 engine cannot serve the slot; the engine still
+  runs an earlier document's marker.
+
+- **mjlab's `generated_commands` is traced like any other observation**
+  ([#156](https://github.com/ttktjmt/mjswan/issues/156)). It reads
+  `env.command_manager.get_command(name)`, a `{"command": name, "field": "command"}`
+  input slot the browser serves from that command's current value, so documents no
+  longer carry the `command` marker and no observation is special-cased by name. A plain
+  scene's trace env has no term for a command only the browser drives, so while tracing
+  the build gives it a zero stand-in of the width it knows (a traced command's state,
+  else its value inputs); a command of unknown width fails the build by name. The engine
+  now refuses to load an observation whose command slot names no command, as it did for
+  the marker, and serves `field: "command"` from any term's `getCommand()`.
+
+- **mjlab's model-field randomization is traced like any other event**
+  ([#157](https://github.com/ttktjmt/mjswan/issues/157)). A `dr.*` body, or an author's
+  own, that writes `env.sim.model` runs against a copy of the model at build time. Each
+  field it reads becomes a `model` input slot naming its elements
+  (`{"model": "geom_friction", "element": "geom", "names": [...]}`, with
+  `"default": true` for `get_default_field`), and each write a `kind: "model"` write
+  target. The graph carries mjlab's own sampling and arithmetic: every `operation`,
+  axis selection, `shared_random`, name-pattern `ranges`, `log_uniform` and `gaussian`
+  draws, and `geom_size`'s bounds recompute. The browser records the compiled values
+  before writing, so an MDP switch still restores them, and runs `mj_setConst` (keeping
+  `qpos`) when the event carries `set_const`. A model write now works in any mode, not
+  only `startup`, and `run_parity` checks it against mjlab draw for draw. Documents no
+  longer carry the `model_field` descriptor; the engine still applies an earlier
+  document's. Document format 5.
+
+- **mjlab's `UniformVelocityCommand` is traced as mjlab wrote it**
+  ([#158](https://github.com/ttktjmt/mjswan/issues/158)); mjswan's rewrite of its body
+  (`bind_velocity_override`) is gone. The tracer now follows in-place draws
+  (`Tensor.uniform_`, `Tensor.normal_`) and env sets a draw selects (`env_ids[mask]`,
+  `mask.nonzero()`), and the build refuses a command whose graph disagrees with the
+  term's own body on draws that take each selection both ways. `init_velocity_prob`
+  works: a term's own addition to `reset` runs in the graph on an episode reset alone (a
+  `reset_mask` input), and its body-frame root velocity write
+  (`kind: "root_velocity_b"`) lands only when the graph's `gate` output says the draw
+  picked the env. Document format 5.
+
+- `mjswan.compile.ReplayRng` takes `rand` by keyword after its functions, as
+  `DrawRecorder` takes `at_lower_bounds`: `ReplayRng(func, rand=rand)`. The 0.11 call
+  `ReplayRng(func, rand)` raises `TypeError`.
+
+- **mjlab's `time_out` is traced like any other termination**
+  ([#130](https://github.com/ttktjmt/mjswan/issues/130)). Its body reads
+  `env.episode_length_buf`, which the tracer serves as an `env` input slot
+  (`{"env": "episode_length_buf"}`) and the browser fills from its own control-step
+  counter; `max_episode_length` is baked into the graph. A lone `time_out` is one graph;
+  beside other terminations it fuses into theirs. Documents no longer carry the
+  `elapsed_s >= episode_length_s` marker, and `run_parity` now checks every termination
+  at every step. A term may also read `max_episode_length` and `max_episode_length_s`, so
+  one following the episode clock (a gait phase, say) traces rather than raising
+  `UnsupportedEnvRead`. This is **document format 4**, since a format-3 engine cannot
+  serve the slot; the engine still runs a format-3 document's marker.
+
+  `build_single_entity_trace_env` takes `control_dt` and `episode_length_s`, since the
+  horizon bakes in as a count of control steps. Unset, its episodes have no time limit,
+  so a `time_out` traced against it never fires, as before. A trace env with no episode
+  length fails the build instead of ending every episode at its first step.
+
+- **The motion-tracking ghost is a Debug Viz drawing, as in mjlab.** It is the **Motion**
+  switch under Debug Viz and shows only while both that switch and **Enabled** are on.
+  The build carries `MotionCommandCfg.debug_vis` and `viz` (`mode`, `ghost_color`), so a
+  task that leaves `debug_vis` off gets no drawing. A document built before this still
+  draws the ghost, in mjlab's default color.
+- **`DebugVisDescriptor` is `{ id, label, enabled }`**, where it was `{ term, enabled }`
+  for command terms alone, and `engine.debugVis.set` takes that `id`.
+- **`ViewerConfig.azimuth` is MuJoCo's: the direction the camera looks.** mjswan measured
+  it toward the camera, so an mjlab task opened on the side opposite mjlab's viewers. The
+  new reading holds in `ViewerConfig.from_position`, `engine.camera.set` and `get`, and
+  the manifest, which moves to document format 3. To keep a view set the old way, add
+  180° to its azimuth, as the default and this repository's examples now do; the main
+  demo's mjlab tasks drop their own cameras and open on mjlab's. An engine reads a format
+  1 or 2 document's azimuth 180° around, so a build made before this opens as it did.
+
+- **The engine no longer draws ENTER VR / START AR.** They sat on `document.body`, over the
+  host's own controls; a host driving `createEngine` now draws its own from
+  `state.xrSessions`. Without three's `VRButton` the page no longer calls
+  `navigator.xr.offerSession`, so a browser stops offering its own VR entry for it.
+- **Hand tracking is a switch, applied at the next model build.** The hands are compiled
+  into the model, so `engine.xr.setHandTracking` rebuilds nothing: the next scene load
+  builds them in, and entering VR or AR first rebuilds a model built the other way. The
+  rebuild keeps the policy, motion, command values, debug drawings, event schedules, splat
+  and camera, and starts the simulation over. `createEngine({ handTracking })` now sets the
+  switch's starting state.
+- **The hands follow the grab anchor's rule.** A policy scene whose model does not
+  namespace its elements now reports `handTracking.available: false` with a reason, as a
+  compiled `.mjb` does, since the hand bones would widen its traced graphs' input. A scene
+  loaded with a policy keeps the rule after the policy is cleared, so neither the hands nor
+  the anchor go into a model its policy may come back to.
+- **The model verbs run one at a time.** `loadScene`, `setPolicy` and `setMotion` used to
+  interleave when called together; they now run in call order, `xr.enter` waits for them
+  before any rebuild, and `dispose` waits for the one running rather than freeing a model
+  it is still building.
+
+- **`mjswan demo` lists the demos instead of running one.** Every demo downloads models
+  and checkpoints before it shows anything, which is not what to do to someone who typed
+  the bare command to find out what exists: `mjswan demo simple` is the old behaviour,
+  spelled out. `--list` goes with it, having become the same command. And `mujoco` joins
+  `main` and `simple`, running `examples/demo/mujoco_models.py`: the one demo that needs
+  no extra at all.
+
+  `_DEMOS` maps a name to a module path as a *string*, so a renamed or deleted example
+  leaves a command that fails only when someone types it. That is how `mjswan demo mjlab`
+  outlived `examples/mjlab/defaults/main.py`; `tests/test_cli_demo.py` now holds every
+  name to a module that is in the tree and has an entry point to reach.
+
+- **Python 3.13 is supported, and the test matrix runs it.** `requires-python` was capped
+  at `<3.13` for `labmaze`, which has no cp313 wheel and reached this tree only through
+  myosuite → dm-control, and myosuite left with the examples that imported it. The cap
+  and the `h5py>=3.8.0` override that came with it are both gone; `uv` resolves the whole
+  `dev` extra on 3.13, mjlab and torch included. The `3.9` classifier goes too: it had
+  contradicted `requires-python` since that became `>=3.10`.
+
+- **MuJoCo 3.11.0 and mjlab 1.6.0, and one MuJoCo on both sides.** The core pin moves
+  from `mujoco==3.8.1` to the `3.11.0` mjlab 1.6.0 needs, and the `[tool.uv]
+  override-dependencies` that reconciled the two inside this repository go, so
+  `pip install "mjswan[mjlab]"` resolves outside it too. The browser takes MuJoCo 3.11.0
+  from `@ttktjmt/mujoco@3.11.0`, pinned exactly and installed under the `mujoco` name the
+  engine imports: MuJoCo's own `@mujoco/mujoco` throws on every `mjtBool` array from
+  3.9.0 on, and the fork is 3.11.0 with the bindings fix of
+  [google-deepmind/mujoco#3616](https://github.com/google-deepmind/mujoco/pull/3616).
+  That name used to resolve to `@ttktjmt/mujoco@3.7.0`, aliased by an
+  unused `mjswan` devDependency, while the declared `@mujoco/mujoco` was imported
+  nowhere, so the browser ran MuJoCo 3.7.0 on what the Python side compiled with 3.8.1;
+  a vitest case now checks what is installed. mjlab 1.6 calls
+  `CommandTerm._update_command(env_ids)` and checks the signature, so a `trace_override`
+  that replaces the method takes `env_ids` too.
+
+- **Inference ships ONNX Runtime's CPU build, so the engine's largest file is 13.3 MiB
+  instead of 26.5 MiB.** Importing `onnxruntime-web` resolves to the JSEP build, whose
+  WebAssembly carries the WebGPU kernels; `onnxruntime-web/wasm` is the same API without
+  them. The policy session asked for `['webgpu', 'wasm']` and now asks for `['wasm']`,
+  which is what every traced MDP term graph already used.
+
+  The 26.5 MiB is over the 25 MiB per-file limit Cloudflare Pages enforces, so a demo
+  hosted there could not serve the file at all: the request fell through to the SPA's
+  `index.html` and the page died on `expected magic word 00 61 73 6d, found 3c 21 64 6f`
+  (that is `<!do`). Dropping the provider also halves the wasm every visitor downloads
+  and takes 330 KB of JSEP glue out of the bundle, against a GPU path whose benefit
+  this size was never measured: a dispatch and readback per step, at 50 Hz, through the
+  one serialized inference queue the page has.
+
+  `vite.wasm.ts` now also states the per-file ceiling, and a unit test holds every
+  co-located wasm source under it: an upstream bump that crosses it would otherwise
+  build green and 404 at runtime.
+
+- **Two `add_policy_*` calls on one scene no longer both claim the default.** Each call
+  marked its own highest-step checkpoint as the one the scene opens on, which the build
+  then refused for having several (ADR 0006 §4). A scene carrying two differently
+  trained policies takes two calls (they are two MDPs), so the first call to name a
+  default now keeps it, and an `add_policy(default=True)` made later takes over from it.
+
+- **A name that collides is renamed along with its id.** Two policies (or projects,
+  scenes, splats, or motions of one policy) whose names sanitize to one id kept one
+  display name between them, and the viewer's select refuses a repeated option, so the
+  page rendered nothing. The second is now named `<name>_1` as its id becomes `<id>_1`,
+  with the same warning, so every name the viewer lists is distinct and still spells its
+  `?scene=` / `?policy=` value (ADR 0006 §4).
+
+- **`add_policy_wandb` checks its extras when called.** With `only_latest=False` it
+  converts at build time, so a missing `wandb`, `mjlab` or `torch` surfaced only after the
+  build had cleared `dist/` and built the frontend; it now raises at the call, naming
+  `mjswan[wandb,mjlab]`. A checkpoint named like one an earlier run already added is still
+  skipped, since a resumed run first saves the step its predecessor stopped at, but now
+  with a warning rather than silently.
+
+- **The demo stores no assets, and `examples/demo/assets/` is gone**: 116 MB of
+  vendored meshes, policies and a `.mjz` scene, none of which had to be in a git
+  repository ([#128](https://github.com/ttktjmt/mjswan/issues/128)). `examples/` is now
+  33 KB of Python across six files. Where each asset went:
+
+  - Models: mjlab's own tasks supply G1, Go1, Yam and cartpole through
+    `add_scene_mjlab`; the one G1 mjlab has no task for comes from the Hub as a
+    directory, `LICENSE` included.
+  - Policies: every W&B checkpoint is mirrored to the Hub, so the deploy workflow needs
+    no `WANDB_API_KEY`: the build is anonymous end to end.
+  - The MyoFinger XMLs, which mjlab has no task for, come from the Hub as a directory,
+    two files, one including the other, plus the `LICENSE`.
+
+  The MyoFinger XMLs move to the Hub with everything else, after upstream relocated them
+  from `finger/` to `myo_sim/models/legacy/finger/` and a branch URL took the build down
+  with a 404: one public host to reach instead of two, and a version that only moves
+  when someone moves it. The `examples` extra sheds MyoSuite, Playground,
+  `robot_descriptions` and `gymnasium` with the gallery projects that imported them.
+
+  `demo/main.py` is rebuilt around that: **two projects instead of four**, and the split
+  is the explanation: *mjlab Tasks* is mjlab taken as it is (8 scenes), *Showcase* is
+  the same engine with mjswan-side work on top (a splat-backed G1, muscle actuators).
+  The three model-gallery projects, about 120 scenes of viewer-only models, are dropped
+  along with the two upstream-API-drift patches they needed, and `demo/simple.py` becomes
+  one task and one checkpoint.
+
+- **`examples/` holds six files, and every one of them builds with what a release of
+  this package installs.** Nothing here reaches for a git URL, a task package or a
+  training run of someone else's: `demo/main.py` and `demo/simple.py` (mjlab tasks and
+  mirrored checkpoints), `demo/minimum_policy.py` (a hand-built ONNX policy) and
+  `demo/mujoco_models.py` (a model gallery, no policy), plus the two Colab notebooks.
+  `minimum_policy.py` and `mujoco_models.py` move up from `tutorial/`, which is gone along
+  with `hello_world.py`, `splat.py` and `muscle.py`: the first duplicated the Quickstart,
+  and the other two showed one argument each, which the API docs already do without a
+  file to maintain.
+
+  `examples/mjlab/` is gone whole. Its five projects (`defaults`, `g1_spinkick`,
+  `myosuite`, `musclemimic`, `unitree_rl`) and `demo/gentle_humanoid` belong to
+  `mjswan_playground`, which can pin `myosuite` from a git URL and hold W&B credentials
+  without either becoming this repository's problem. What they demonstrated about *this*
+  package already has a home: the library code they carried moved into the package or
+  was deleted (below), and the tasks and checkpoints they read are in `demo/main.py` by
+  way of the Hub.
+
+- **The library code that lived in `examples/` moves into the package, or goes.**
+  `examples/mjlab/defaults/{commands,terminations}/` were imported by a test, by a
+  sibling example, and by the `mjlab-to-mjswan` skill, which told an agent to *fetch the
+  file from the repo*, a layering inversion the reorganization of `examples/` (#128)
+  would otherwise carry forward.
+
+  - `register_custom_terminations` is deleted, not moved. It wrote `limit_x`/`limit_y`
+    and `half_x`/`half_y` into mjlab's `out_of_terrain_bounds` and
+    `terrain_edge_reached` for the browser-side classes that read them, which went with
+    the built-in MDP engine. mjlab's own functions take no such params: on a config
+    that still has the term, the build stops with `TypeError: got an unexpected keyword
+    argument 'limit_x'`, and the limits it computed were not mjlab's anyway (no
+    `border_width`, `num_cols` where a curriculum grid has one column per sub-terrain).
+    On the demo's play configs, which drop `out_of_terrain_bounds`, it changed nothing.
+  - The command registrations do not move as a module. mjswan binds the classes mjlab's
+    task families share, `UniformVelocityCommandCfg` and `MotionCommandCfg`, and now
+    traces the latter's reset jitter with no import of your own. `LiftingCommandCfg`,
+    which only Lift-Cube-Yam uses, is registered by `examples/demo/main.py`, with the
+    trace override mjlab 1.6 needs (its `_update_command` calls `env.sim.forward()`)
+    and its target sphere. `mjswan.mjlab` holds nothing specific to one task.
+
+- **`wandb` is no longer a core dependency: `pip install mjswan` drops by about 108 MB.**
+  It moves to its own `wandb` extra, beside `hf` and a new `mjlab` one, because it is the
+  same kind of thing: a `source/` backend imported inside a function. `import mjswan`
+  never touched it, so a user who bundles an ONNX they already have was downloading a
+  training-log client to not use it.
+  **Callers of `add_policy_wandb` / `add_motion_wandb` must now install `mjswan[wandb]`**;
+  without it the failure is a sentence naming the extra, as the Hub path already did.
+
+  The rest of the reshuffle follows one rule: core is the pipeline, extras are where the
+  assets come from:
+
+  - `mjlab` extra: `mjlab` and `torch`, split out of `examples` so that "I convert mjlab
+    checkpoints" and "I run the bundled demos" can be asked for separately. The docs that
+    said `mjswan[examples]` for a traced term now say `mjswan[mjlab]`.
+  - `check` extra: `ruff`, `ty`, `pyright`, what `make check` runs. The ruff workflow
+    installs this alone, so a linter job no longer resolves a source backend.
+  - `dev` extra: `check` plus every source, plus `pytest` and `pre-commit`. This closes a
+    real hole rather than being tidiness: `pytest.yml` installs `.[dev]`, and 33 tests
+    were gating themselves off with `importorskip("mjlab")` in a job that never had
+    mjlab, with no other job covering them: `parity.yml` names five files and reaches
+    the rest. The two workflows that now resolve torch ask for the CPU wheel, since
+    mjswan only ever calls `torch.onnx.export` and `torch.load(map_location="cpu")`.
+  - A `core` job in `pytest.yml` installs mjswan with no extra at all and checks that it
+    imports, builds a model-only scene, and answers each source's call with the extra
+    to install: the promise above, held by an install that has none of them.
+
+- **`import mjswan` no longer imports `onnx`**, only `mujoco` and `numpy`: about 190 ms
+  down to 125 ms, 153 fewer modules. It still imports torch where torch is installed, and
+  mjlab where that is too, since the traced command and event rewrites need mjlab's
+  `sample_uniform` as a module global.
+  `policy.py`, `scene.py` and `mjlab/runner.py` annotate an `onnx.ModelProto` but never
+  touch the module (they read `model.graph` duck-typed), so the import moves under
+  `TYPE_CHECKING` and into the one function that loads a file. Opening a MuJoCo model in
+  the viewer with no policy involved now costs nothing for a policy format it never reads.
+
+- **The package is laid out by layer** ([ADR 0008](docs/adr/0008-package-layout.md)).
+  The root holds the object model (`Builder`, the `*Handle` / `*Config` pairs,
+  `MdpConfig`, `cli.py`) and everything else is a package with one job: `build/` (what
+  `Builder.build()` does, and the one place that knows the manifest's shape), `compile/`
+  (the tracer, one module per pass and per term kind), `mjlab/` (everything that reads
+  mjlab's own objects: the adapters, the trace envs, the runner, the exported-ONNX
+  metadata reader), `source/` (`wandb.py`, `hf.py`: fetching only, conversion is the
+  runner's), `document/`, `cloud/` and `license/`, beside the mjlab-mirror `managers/`
+  and `envs/mdp/`. The public API in `mjswan/__init__.py` is unchanged; module paths are
+  not: `mjswan.command` → `mjswan.managers.command_manager` (the configs,
+  `CommandBinding`, `register_command`) and `mjswan.envs.mdp.commands` (`ui_command`,
+  `velocity_command`); `mjswan.trace_env` → `mjswan.mjlab.env`; `mjswan.wandb_io` →
+  `mjswan.source.wandb`, and `mjswan.mjlab.runner` for the `.pt` export;
+  `mjswan.publish` / `auth` → `mjswan.cloud.publish` / `auth`; `mjswan.licenses` →
+  `mjswan.license`; `mjswan.document` is a package; `mjswan._cli` → `mjswan.cli`;
+  `ActionTermCfg` is defined in `mjswan.managers.action_manager`, as mjlab's is. The
+  ADR carries the full old → new table. No compatibility shims: old module paths do not
+  import.
+
+- **The engine bundle fetches ONNX Runtime Web's wasm from within its own `dist/`**
+  ([#123](https://github.com/ttktjmt/mjswan/issues/123)): `dist/mjswan.js` pointed
+  `ort.env.wasm.wasmPaths` at `cdn.jsdelivr.net/npm/onnxruntime-web@<version>/dist/`, so
+  every policy-driven scene loaded ORT's `.mjs` loader as script from jsDelivr, which even
+  a host serving `dist/` from its own origin had to allow in `script-src`. The build now
+  emits ORT's wasm into `dist/assets/` and names that file in `wasmPaths`, resolved against
+  `import.meta.url`: no second origin, and no `.mjs` fetched at all, since the bundled ORT
+  build carries its loader inlined. The ORT version is still fixed at build time — now the
+  bytes in the package rather than a URL. A consumer serving `dist/` as published sees only
+  the change of origin; one that mirrored `onnxruntime-web` for the old URL can stop.
+
+- **ONNX Runtime Web 1.24.3 → 1.29.0.**
+
+- **`dist/` ships each WASM once, and `dist/` is 47 MiB instead of 87**
+  ([#123](https://github.com/ttktjmt/mjswan/issues/123)): the SPA and library builds write
+  into one directory and had been disagreeing about where — the SPA under `assets/`, the
+  library build renaming everything to `mjswan-engine-<hash>.wasm` — so 40 MiB of
+  byte-identical MuJoCo and ONNX Runtime WASM shipped twice: in the npm package, in the
+  wheel (`dist/` is packaged despite being gitignored), and in every built app, which
+  copies the whole directory. Both now name each file from its source basename plus a Vite
+  content hash under `dist/assets/`, so identical bytes land on one path. Only `mjswan.js`
+  and `manifest.js` stay at the root, where they are addressed from outside as npm
+  entries. The npm package also stops shipping the E2E fixture and the frontend's test
+  files.
+
+- **Every scene carries a `camera`, and the view follows the robot by default.** The
+  build used to omit the block for a scene that never called `set_viewer`, and the
+  browser filled the gap from defaults generated out of the Python dataclass. The two
+  did not agree: a missing block left tracking off, so the camera watched the robot walk
+  out of frame, while an explicit `ViewerConfig()` with the same values tracked it. The
+  build now resolves the whole block for every scene, `fovy` included, and the browser
+  reads what the document says. A scene that set no viewer therefore tracks the first
+  non-world body, as one that set the defaults by hand always did.
+
+- **The default observation slot is `actor`** (was `policy`), mjlab's own name for the
+  group its actor network reads, in Python (`DEFAULT_OBS_GROUP_KEY`) and the engine
+  together. A lone observation group lands there and needs no `in_keys`; the common fused
+  graph is `mdp/<mdp-id>/obs/actor.onnx`. The engine's `obs`→`policy` input-name special
+  case is gone; the mapping from `in_keys` onto a network's inputs is positional, so what
+  the network calls its tensors never matters.
+- **Every project, scene, MDP, policy and splat has an id**, `name2id(name)`, unique
+  within its parent — the directory it is written to and the value `?project=` /
+  `?scene=` / `?policy=` take. Two siblings whose names sanitize alike get `<id>` and
+  `<id>_1` with a `RuntimeWarning` naming both. The frontend's `sanitizeName` is the same
+  function, pinned to `name2id` by a shared table of cases (apostrophes, parentheses and
+  accents included), so `?scene=newton_s_cradle` opens Newton's Cradle.
+- mjlab's network-keyed observation dict is reduced by the runner's whole `obs_groups`,
+  not by the `actor` name: only groups the runner attributes to a network are renamed or
+  dropped, so a multi-input policy's own slots (`command_`) survive beside `actor`.
+  `adapt_observations(obs_groups=...)` replaces `policy_groups=`; `MjlabRunnerDefaults.obs_groups`
+  replaces `policy_obs_groups`.
+- A `config_path` sidecar contributes the checkpoint's own defaults (`policy_joint_names`,
+  `default_joint_pos`, an `actions` block) and nothing else: its `onnx` block is dropped
+  and any `in_keys` / `out_keys` in it are ignored with a warning pointing at `add_policy`.
+- `mjswan/manifest`: `parseManifest` takes the new `Manifest` shape (`AppConfig` remains
+  as a deprecated alias), maps its `snake_case` onto the engine's camelCase
+  (`ViewerConfig`, `SplatTransform`), orders the default project first, and gives the
+  engine a policy config that is the manifest entry merged with its MDP — slot tables at
+  the top level, events included. `SceneInput` lost `events` and `graphs`; `PolicyInput.graphs`
+  carries the whole MDP's graphs, events included, keyed by scene-relative path.
+- **Methods**
+  - `ProjectHandle.add_mjlab_scene` → `ProjectHandle.add_scene_mjlab`
+  - `SceneHandle.add_policy_from_wandb` → `SceneHandle.add_policy_wandb`
+  - `SceneHandle.set_viewer_config` → `SceneHandle.set_viewer`
+  - `SceneHandle.add_splat_section` → `SceneHandle.enable_splat_section`
+  - `PolicyHandle.add_motion_from_wandb` → `PolicyHandle.add_motion_wandb`
+    (parameter `wandb_run_path` → `run_path`)
+- **Classes**
+  - `mjswanApp` → `MjswanApp` (deprecated alias kept until 0.9)
+  - `ObsBinding` / `ObsFunc` → `ObservationBinding`
+  - `TermBinding` / `TermFunc` → `TerminationBinding`
+  - `EventFunc` → `EventBinding`
+  - `CommandTermSpec` → `CommandBinding`
+  - `MjlabMdpBinding` → `MdpBinding`
+- **Functions**
+  - `register_obs_func` → `register_observation`
+  - `register_termination_func` → `register_termination`
+  - `register_event_func` → `register_event`
+  - `register_command_term` → `register_command`
+- **Modules**
+  - `mjswan.viewer_config` → `mjswan.viewer`
+  - `mjswan.wandb_utils` → `mjswan.wandb_io`
+- The built `dist/` no longer copies the unused `logo-color.svg` (only `logo.svg`).
+- mjlab is pinned exactly, now `mjlab==1.6.0` in the `mjlab` extra (was `==1.5.3` in
+  `examples`, and `>=1.3.0` before that), because the tracer reads mjlab's internals; a
+  weekly CI parity sweep catches upstream drift. The `examples` extra adds `onnxruntime`.
+
+### Removed
+
+- **`engine.setReferenceVisible`, the "Show reference" checkbox and `?ref=0`.** The ghost
+  is the `motion` term's debug drawing: `engine.debugVis.set('command:motion', enabled)`
+  toggles it alone, and `engine.debugVis.setEnabled` or `?debug=0` every drawing. A link
+  still carrying `ref=0` opens with the ghost shown.
+
+- **`?hands=1`.** Use the **Hand tracking** switch in the control panel's WebXR section
+  instead. It starts off on every page load and is not written to the URL.
+
+- **The pre-0.8 compatibility aliases** (`mjswan._compat`), which were due to go in 0.9:
+  the renamed methods (`add_mjlab_scene`, `add_policy_from_wandb`, `set_viewer_config`,
+  `add_splat_section`, `add_motion_from_wandb`), the `mjswanApp` class name, the
+  `register_obs_func` / `register_termination_func` / `register_event_func` /
+  `register_command_term` functions, the MDP binding class aliases (`ObsBinding`,
+  `ObsFunc`, `TermBinding`, `TermFunc`, `EventFunc`, `MjlabMdpBinding`,
+  `CommandTermSpec`) and the module aliases `mjswan.viewer_config` / `mjswan.wandb_utils`.
+  Use the spelled-out names.
+- The `main`, `simple` and `mjlab` console scripts, which only launched a module under
+  `examples/` (`mjswan demo main` and `mjswan demo simple` do the same), and `serve`,
+  which `mjswan serve <dist-dir | document.swn>` replaces.
+- **`mjswan demo mjlab`**, which ran `examples/mjlab/defaults/main.py`, the same tasks
+  read from a W&B run instead of the Hub. That example moves to `mjswan_playground`, and
+  with it the only demo needing a W&B login.
+- **`mjswan demo --list`** and **`mjswan demo` with no name running `simple`**: the bare
+  command now lists, which is what `--list` did.
+- **`config.json` and the per-policy `<policy>.json`**, replaced by the one root
+  `manifest.json` (supersedes ADR 0005 §1). The per-project `index.html` / `logo.svg`
+  copies and the `main/` special case for the first project go with them: a project's
+  directory is its id, and the app resolves `?project=` against ids only.
+- `add_project(id=...)`: a project's id is `name2id(name)`, so the directory and the
+  `?project=` value can never disagree. Passing `id=` raises `TypeError`.
+- `eventGraphRefs` from `mjswan/engine`, with no alias. Events are part of a policy's MDP
+  now, so `policyGraphRefs(config)` already enumerates their graphs; a scene carries no
+  event list for a separate helper to scan.
+- Slot tables read from a `config_path` sidecar (`onnx.meta.in_keys` / `out_keys`, or
+  top-level `in_keys` / `out_keys`): declare them on `add_policy` instead.
+- **`mjswan.dsl`**, the declarative composition-graph DSL (ADR 0003) and its TypeScript
+  interpreter, with no alias. Term bodies are traced to ONNX instead (see Added), so
+  `div` / `sqrt` / `slice_` / `normalize` / `quat_to_rot6d_columns` and the rest have no
+  successor: write the term as an ordinary mjlab-style Python function against the live
+  env and let the build trace it. `scripts/verify_dsl_migration.py` goes with it.
+- `PolicyHandle.add_velocity_command` / `add_command_velocity`, both with no alias. Pass
+  `commands={"velocity": mjswan.velocity_command(...)}` to `add_policy()` instead.
+- **`viewer_config_defaults.ts` and its generator.** The defaults were code-generated
+  from Python's `ViewerConfig` on every build to keep the two in step. The document now
+  carries the resolved values instead, so the browser has nothing to keep in step: the
+  small view it falls back on is ordinary source, reached only by a manifest mjswan did
+  not write, which also logs a warning. Nothing is generated into the template any more,
+  so a fresh checkout builds and tests with no Python step in front of it.
+- **The generated `custom_*.ts` registries**, and the `Observations` / `Terminations` /
+  `Events` modules that held nothing else. A `ts_src` term is collected into the standalone
+  `plugins.js` and reaches the engine as `EnginePlugins` (ADR 0004 §10), so nothing had
+  written those files since; the build stamped four empty registries out and the runtime
+  spread four empty objects into the maps the plugins already filled. The comments claiming
+  the registries held `ts_src` terms described the design they replaced.
+- **Python 3.10.** `requires-python` is `>=3.11`. 3.10 reached its end of life this month,
+  and the fixes for the Pillow and filelock advisories (Pillow 13, filelock 4.2.1) require
+  3.11, so a 3.10 install could only resolve the vulnerable releases.
+
+### Fixed
+
+- **A tracking policy observes the reference frame mjlab gives it after a reset.** mjlab's
+  `MotionCommand` writes a reset's start frame into the simulation, then steps one frame
+  past it in the compute that follows every reset, so the first observation reads frame
+  1. The browser held the start frame for a step instead, and for two after a reset
+  between steps (a clip picked, the reset key, a page load): the policy read the
+  reference one or two control steps late for the whole episode. `TrackingCommand.reset()`
+  now runs that compute itself, as `OnnxCommand.reset()` does, and a clip's wrap still
+  starts at the frame it writes, as mjlab's does. A `MotionCommandCfg` subclass whose
+  command serves the start frame first sets `hold_reset_frame = True`, which the build
+  carries to the browser.
+
+- **A tracking reset spins the root as the clip does.** `TrackingCommand` wrote the clip's
+  root angular velocity, which is in the world's frame, into the free joint's `qvel`
+  unrotated, where MuJoCo reads it in the body's frame, as mjlab's `write_root_velocity`
+  and the engine's own `writeRootVelocity` write it. A clip starting with its root turned
+  gave the robot a wrong spin at each reset (up to 0.59 rad/s on a musculoskeletal human
+  walking clip); it is now rotated into the body's frame.
+
+- **The step loop holds its control rate.** It slept out each step's remainder, so a timer
+  that woke late (Chrome clamps nested timers to 4 ms) was never made up: a 200 Hz task
+  ran at about 165 steps a second, and a 50 Hz one at 48. Each step now waits for a
+  deadline one period after the last, and the loop drops the backlog once 250 ms behind.
+
+- **Xray shows the whole robot in a scene with a splat.** From some angles only the
+  parts behind the skin showed: three could draw the splat, one transparent mesh for all
+  its points, after the robot and over it.
+
+- **The npm package, the wheel and every build carry the licenses of the packages the
+  engine bundles**, in `THIRD_PARTY_LICENSES.md` beside it. Minifying had dropped the
+  notices in their code (three, three-vrm, ONNX Runtime Web, MuJoCo, JSZip, React,
+  Mantine and the rest), and no file carried them instead.
+
+- **A tracking task's `ReferenceJointPositionActionCfg` holds the default pose until its
+  clip loads.** It targeted 0 rad on every joint.
+
+- **A `<dcmotor>` in position or velocity mode is driven by its target.** The browser
+  took it for a motor and wrote a PD torque from zero gains.
+
+- **A recurrent policy's carry starts at the width its network declares**, not always
+  128, and a failing inference is logged as an error rather than stopping the robot
+  silently. While it fails, a traced action term holds its targets rather than integrate
+  the last action again, and the same error recurring after a recovery is logged again.
+
+- **An mjlab setting the browser does not run warns at build time** instead of being
+  dropped silently ([#165](https://github.com/ttktjmt/mjswan/issues/165)). An action term
+  keeps only the fields mjswan's class has, so one it lacks (a fork's `lpf_cutoff_freq` on
+  `JointPositionActionCfg`) now warns when it holds a non-default value. The browser runs
+  an ideal-PD actuator's PD within its effort limit and nothing more, so the fields an
+  `IdealPdActuatorCfg` subclass adds (`DcMotorActuatorCfg`'s torque-speed curve, the
+  friction in wbc's `UnitreeActuatorCfg`) and a command delay now warn too, once per
+  actuator config.
+
+- **A policy's own env config sets its episode length.** Every MDP of a scene traces
+  against the scene's env, so a time limit ended each policy's episodes at the scene
+  config's length, even for a policy given an `env_cfg` with its own: asimov's 3 s safe
+  fall ran 20 s episodes on the walk's scene. `MdpConfig.episode_length_s` now takes that
+  config's length, and the MDP's terms trace at it.
+
+- **Meshes collide as MuJoCo compiled them.** The browser turned each mesh's vertices
+  Y-up for three in place, in the model arrays MuJoCo collides against, so every mesh
+  collider sat turned 90 degrees about its own x while the drawn mesh looked right. On
+  wuji-mjlab's pen spin that dropped the pen in 9 of 21 episodes, where MuJoCo's C build
+  drops none. The renderer now turns copies.
+
+- **A box draws a cube texture's faces where MuJoCo does.** A cube textured face by face
+  (a die, a tagged cube) showed each image on another face, turned: the `fileright` (+X)
+  image on +Z.
+
+- **A single-threaded build no longer ships the multithreaded MuJoCo.** Built without
+  `Builder(mt=True)`, the SPA resolves `mujoco/mt` to a stub, which leaves out the
+  10.5 MB build its app never loads: the engine goes from 36 MB to 26 MB. An `mt=True`
+  build ships both, as before.
+
+- **`build_single_entity_trace_env` computes no contacts.** A scene with more collision
+  candidates than the one-env `nconmax` holds could crash the build with a bus error in
+  `reset()`; nothing traced reads a contact.
+
+- **`apply_mjlab_sim_options` writes the whole `MujocoCfg` for any caller.** It fell
+  back to copying the flags alone unless `add_scene_mjlab` had installed
+  `MujocoCfg.apply_to_spec` first, so a scene built from XML that called it ran at
+  MuJoCo's default timestep and integrator.
+
+- **An episode times out on the step mjlab's does.** The browser summed the control `dt`
+  in floating point, so an episode could run a step long; it now counts steps against
+  `ceil(episode_length_s / step_dt)` as mjlab does, for a document of any format. A reset
+  from the UI or a command now restarts that count. A traced termination's verdict is no
+  longer a step late: the manager waits for every termination graph before it decides
+  the step.
+
+- **An mjlab scene runs at mjlab's timestep, integrator and solver settings.** The
+  exported spec took only `MujocoCfg`'s flags, so the browser stepped at MuJoCo's
+  defaults (0.002 s, Euler, 100 iterations) whatever the task set, and a control step
+  that is not a whole number of 0.002 s steps ran at the wrong rate. mjlab's own
+  `MujocoCfg.apply` now writes the spec's `option`.
+
+- **An event term that indexes its `env_ids` traces.** The tracer called every event
+  body with `env_ids=None`, which mjlab's `EventManager` passes only at startup and for
+  a global-time interval; reset and interval terms get the firing envs' ids. A term
+  written for those ids, reading `data[env_ids]` with no `None` case, traced an extra
+  axis: the build passed, and the browser's graph failed on every firing, silently in
+  a production build. Each term now gets the `env_ids` mjlab would pass it in its mode.
+
+- **The local server never hands the browser an earlier build.** `MjswanApp.launch()`,
+  behind `mjswan view`, `serve` and `demo`, sent no `Cache-Control`, so a browser could
+  run an earlier build's cached engine, scene or policy: after an upgrade, the page
+  failed with "this engine reads up to format 2". It now sends `no-store`, except for
+  the content-hashed bundle files in `assets/`, which it marks `immutable`.
+
+- **A term that branches on a sensor field the sensor does not compute now traces.**
+  mjlab's `illegal_contact` checks `force_history is not None` first; on a contact
+  sensor without `history_length` the replay pass raised "was not recorded during
+  discovery" instead of answering `None` as the sensor does.
+
+- **A fused termination that reads a contact or raycast sensor runs in the browser.**
+  Two or more traced terminations fuse into one graph, and its entry left out the
+  descriptors of the structured sensors its terms read, which a lone term's entry
+  carries. The browser could not fill that sensor's slot, so it skipped the whole graph
+  every step, silently in a production build, and none of the group's terms ever fired:
+  a tracking task's deviation and contact terminations, or a dodgeball task's hit and fall
+  terminations, never reset a fallen robot. The fused entry now carries `sensors`, as a
+  fused observation group's does.
+
+- **A traced term that reads a command with `get_command()` gets it in the browser.** The
+  build records `get_command(name)` as the input `{command: name, field: "command"}`,
+  which the browser did not serve, so the term's graph never ran: an observation stayed at
+  its starting zeros while `run_parity` passed. `OnnxCommand` and `TrackingCommand` now
+  serve `command` as `getCommand()`.
+
+- **A traced term that reads a command sees the joystick, as mjlab's does.** mjlab's
+  velocity command writes the joystick into `vel_command_b`, so a term reading it there
+  follows the sliders; the browser served such a read the raw autonomous value. The
+  command's own field now carries the UI override.
+
+- **An auto-reset updates a traced command once, as mjlab does.** `OnnxCommand.reset()`
+  already runs `_update_command` after the resample, and the step's own update ran it
+  again, so the observation after a termination saw the command one update ahead.
+
+- **A term set to `None` is switched off, as in mjlab.** mjlab's managers skip an
+  observation term or group, event, termination, command or action set to `None` (how a
+  play config or subclass drops an inherited term). The observation adapter crashed on
+  one with `AttributeError: 'NoneType' object has no attribute 'func'`, and the
+  termination, command and action adapters passed the `None` on. Every adapter now
+  skips it, so the built observation has mjlab's `active_terms`.
+
+- **An mjlab observation config that sets a field mjswan cannot carry fails the build**
+  instead of having it dropped. The adapter copied the fields it knows and nothing else,
+  so a task's subclass adding a layout flag (PAC-MAN's `history_ordering="time"`, which
+  stacks a group time-major) built clean and fed its policy a same-width, reordered
+  observation. Each term and group is now walked as a dataclass; a field the adapter
+  drops that holds a non-default value raises, naming it. That covers mjlab's own
+  `flatten_history_dim=False` with history and a `concatenate_dim` off the feature axis.
+  Training-only fields (`noise`, `delay_*`, `nan_policy`) are still ignored.
+
+- **An event that writes only constants applies its write in the browser.** When every
+  value an output carries is baked, the exporter folds it into an initializer and the
+  graph output keeps the initializer's name (`"14"`) rather than the one requested.
+  The bundle's `write_targets` still named the requested output, so the browser found
+  no value and skipped that write without a word (a joint parked at a fixed position got
+  its zero velocity but not the position), and `run_parity` failed with `Invalid output
+  name`. Every traced graph now gets its requested output names back through an
+  `Identity`.
+
+- **`run_command_parity` checks a command that draws nothing.** It fed every command
+  graph a `rand` input, but the export prunes one the body never reads, so ORT refused
+  the feed (`Invalid input name: rand`) for a draw-free resample such as mjlab's
+  `LiftingCommandCfg(difficulty="fixed")` without an object reset. Feeds now go
+  through `_declared_feeds`, as `run_parity`'s already do.
+
+- **Switching scenes frees the scene it leaves.** The engine dropped its references to
+  the old `MjModel` and `MjData` before handing them to the loader that was to delete
+  them, so each switch kept the previous model on the WASM heap for the life of the
+  page, where a session of switches between large scenes ends in `WasmMemoryLimitError`.
+  The engine now frees them itself, on a switch and in `dispose()`.
+
+- **Switching policies or scenes frees the policy it leaves.** `setPolicy` and
+  `loadScene` dropped the previous policy network's ONNX Runtime session without
+  releasing it, so every switch left one on ORT's WASM heap for the life of the page.
+  The swap now releases it, behind any inference still running, since `setPolicy` swaps
+  policies while the simulation runs. The traced term graphs were already released.
+
+- **A policy switch during an inference no longer fails that step.** The simulation loop
+  read the policy network again after waiting on its inference, so a `setPolicy` that
+  landed mid-run made the step throw on the cleared network and log
+  `ONNX inference failed`. The loop now drops an output whose policy was switched out
+  while it ran.
+
+- **A scene added with `add_scene(model=...)` opens in the browser.** The build saves such
+  a scene as a compiled `.mjb`, but the engine opened every scene as a zipped `.mjz`, so
+  JSZip rejected it before MuJoCo saw it. The build names the file for the argument
+  `add_scene` got, the catalog passes that on as `SceneInput.modelFormat`, and the engine
+  loads an `.mjb` with `mj_loadModel`. An `.mjb` still opens only in the MuJoCo version
+  that saved it, and goes without the XR hands, which are added to the MJCF.
+
+  mjswan Cloud takes `.mjz` scenes only, and `mjswan publish` used to leave the `.mjb`
+  behind and publish a simulation with no scene. It now refuses the build and says to add
+  the scene with `spec=`.
+
+- **`mjswan new --template policy` writes a project that builds.** A scene with a policy
+  must say how often the policy acts, and the build refuses one that does not, so the
+  template stopped at `builder.build()` once its `policy.onnx` was in place. It now passes
+  `control_dt=0.02`, marked as the value to set to the policy's own rate.
+
+- **`mjswan info` shows each project's id.** The id is printed in brackets, and rich read
+  `[my_robots]` as a style tag and dropped it. `info` now escapes every name, id and path,
+  and the build's progress bar renders names without markup, so a scene named `G1 [v2]`
+  no longer shows as `G1`.
+
+- **An `actuator_names` alternation keeps its entity prefix on every branch.** mjlab's
+  patterns are prefixed with the entity (`robot/…`) to match `policy_joint_names`, and
+  the runtime reads each as `^(?:…)$`, so `robot/a|b` matched `robot/a` or a bare `b`. An
+  alternation is now grouped: `robot/(?:a|b)`.
+
+- **A license beside a model in the Hugging Face cache reaches the build.** License
+  detection resolved each asset path, and the cache keeps every file in `blobs/` behind a
+  symlink from its snapshot, so a `LICENSE` beside the meshes rather than the XML was
+  never found. Paths are now made absolute without following links, and a license at a
+  snapshot's root is named after the repository rather than the commit.
+
+- **A term reading `env.sim.data` is traced, and a termination that reads nothing fails
+  instead of becoming the `time_out` rule**
+  ([#129](https://github.com/ttktjmt/mjswan/issues/129)). `env.sim.data.<field>` and
+  `entity.data.data.<field>` are one object, but only the second spelling was recorded:
+  the first fell through to the real env and the term traced to a constant, shipping an
+  observation as `native: "constant"` or a termination as the timeout rule
+  `elapsed_s >= episode_length_s`, minus its `time_out` flag. Both spellings now record
+  one `sim` slot, and every other `env` attribute is either a forwarded constant
+  (`num_envs`, `device`, `physics_dt`, `step_dt`, `cfg`) or raises `UnsupportedEnvRead`
+  naming what a term may read instead. Events and commands hold the same contract, so a
+  model-field randomization (`geom_friction`, `body_mass`, …) runs against a copy of the
+  model rather than the live one at build time. A termination that traces to a constant
+  fails the build, `time_out=True` or not, and a baked observation term is named in a
+  `RuntimeWarning`.
+- **White robots render white.** A `<material>` that declares no `metallic` (every
+  material in Menagerie and mjlab, G1's `0.7 0.7 0.7` and Microduck's included) was
+  handed MuJoCo's `specular` as its `metalness`. The two are unrelated: `specular` is a
+  Blinn-Phong highlight coefficient MuJoCo *adds* to full diffuse albedo, `metalness` is
+  three.js' dielectric/conductor switch, so its 0.5 default made every such material half
+  metal. three.js scales diffuse by `(1 - metalness)` and the metallic half has no
+  `scene.environment` to reflect, so a pure-white surface came out at 62% grey and the
+  whole albedo range compressed. Materials that do declare `metallic` are unaffected.
+  `reflectance` no longer feeds `reflectivity` either: it is mirror-reflection strength,
+  already spent on `envMapIntensity`, and its 0 default forced `ior` to 1.0, flattening
+  the dielectric highlight these materials now depend on.
+- **The scene is lit in MuJoCo's units, so mjswan matches the MuJoCo viewer.** Measured
+  against MuJoCo 3.12's renderer over five robots at a matched camera, mean absolute
+  error per pixel drops from **39.5 to 5.5** (8-bit, no exposure fitting). Three fixes,
+  none of which a viewer setting could compensate for: `AmbientLight` was built at
+  intensity 1.0, but three.js' Lambert BRDF divides irradiance by pi, so ambient landed pi
+  times darker than MuJoCo's `rgba * ambient` (the largest term, worst on mjlab scenes
+  with their 0.3 headlight ambient); each light's intensity folded `specular` into
+  `diffuse` and scaled it by an invented `light_intensity || 0.5`, and is now
+  `max(light_diffuse) * pi`, with the `specular/diffuse` ratio moved to the material's
+  `specularIntensity`, which is what stops highlights being 4x too hot under MuJoCo's
+  defaults; and `ACESFilmicToneMapping` applied a film curve MuJoCo does not have,
+  costing up to 56% of the saturation in coloured regions, so the renderer no longer tone
+  maps. `outputColorSpace` stays `LinearSRGBColorSpace`, since MuJoCo does no colour
+  management either.
+- **A material that declares `reflectance="0"` no longer reflects.** `envMapIntensity`
+  read it as `mat_reflectance || 0.5`, and MuJoCo's default *is* 0, so every material
+  that left the attribute out, or zeroed it deliberately, got a half-strength environment
+  reflection.
+- **A scene's policies no longer overwrite each other's traced graphs.** A graph's
+  bundle path was built from its kind and name alone (`obs/policy.onnx`) under the
+  *scene* directory, while its contents are per-MDP, so a second policy in the same
+  scene wrote over the first, and every earlier policy's config went on pointing at it.
+  Nothing caught it at either end: the build overwrote silently, and the runtime pads or
+  truncates a mismatched vector to the `size` the config declares, so a policy loading a
+  sibling's graph merely behaved oddly. Graphs now live under their MDP's directory
+  (`mdp/<mdp-id>/obs/actor.onnx`, see Added), and a write that would replace a
+  *different* graph at one path fails the build rather than shipping it.
+- **The control panel is mjviser's, control for control.** Two viewers onto the same
+  mjlab task should not look like two products, so the panel now renders what mjlab's
+  viser GUI renders: command groups nested in a `Commands` folder, one row per control
+  with the label in a `5.975em` column, a slider carrying its two ends as marks *and* a
+  `3rem` number box that takes typing (at mjviser's `1.875em` height, which keeps a
+  slider row as tall as the checkbox row above it), the "Max" companion above the axis it
+  rescales, a checkbox in the control column rather than captioning itself, and a
+  full-width filled button carrying the icon its mjlab GUI asked for (`Icon.SQUARE_X` on
+  `Zero` being the only one mjlab declares today). The slider thumb is mjviser's bar
+  rather than Mantine's dot (`thumbSize: 0` plus a `0.5rem × 0.75rem` box in the slider's
+  own colour) on a square-cornered `xs` track. Sizes are `em`-relative, so both panels
+  stay identical under their own root font size, and the slider styling lives in the
+  theme, so every slider in the app follows, the splat calibration panel included.
+  `ButtonConfig` grew an `icon`, recorded by the GUI spy from the term's `create_gui`.
+- **The control panel draws button commands.** `button` has been a command input type all
+  along, `CommandManager.triggerButton` wired to the term, and `engine.commands.trigger` a
+  verb, but the panel filtered its controls down to sliders and checkboxes, so mjlab's own
+  `Zero` (declared by every `UniformVelocityCommand` GUI) never existed for a viewer.
+  Buttons now render in declaration order, so `Zero` lands under the sliders it zeroes,
+  and the values a press moves are re-read from the term rather than left stale in the
+  panel's mirror. `UiCommand` answers to `zero` as well, so a hand-written panel gets the
+  same button, and a press no term answers to warns once instead of doing nothing.
+- A position action term now inherits its PD gains from the entity's actuator configs.
+  mjlab's ideal-PD family (`IdealPdActuatorCfg` and subclasses, which is what
+  `wbc-mjlab`'s G1 uses) puts a `<motor>` in the model and computes
+  `kp·(q* − q) + kd·(0 − q̇)` in torch. The browser mirrors that for a `biastype=none`
+  actuator, but read the gains off the *action* term, where mjlab keeps them on the
+  *actuator*, so every such task got kp = kd = 0, every `ctrl` zero, and a robot that
+  ignored its policy and collapsed. A motor term with no stiffness is now an error rather
+  than running limp.
+- `register_command` now maps a command config wherever its class lives. The adapter only
+  consulted the registry for classes from the `mjlab` package, so a task's own
+  `CommandTermCfg` subclass passed through unadapted and failed later in the serializer
+  on a missing `pending_trace`.
+- The action adapter maps a config wherever its class lives too, and no longer lets a
+  rewrite escape into a caller's config. A task's own `ActionTermCfg` subclass passed
+  through unconverted, and `resolve_action_scales` then rewrote its `scale` keys in place,
+  on the very object the task's live env config holds, leaving mjlab unable to resolve
+  them several frames from the cause. An unrecognized term is now copied rather than
+  shared.
+- The observation and termination adapters convert a config wherever its class lives, as
+  the command and action adapters now do. `_is_from_mjlab` read the leaf class's own
+  module, so a task's *subclass* of an mjlab `ObservationGroupCfg` passed through
+  unadapted, carrying mjlab term objects into the serializer, which failed on the first
+  mjswan-only field it read (`AttributeError: 'ObservationTermCfg' object has no
+  attribute 'history_steps'`). The whole MRO is consulted now.
+- The velocity command does all of what mjlab's `UniformVelocityCommand` does:
+  forward-only envs (`rel_forward_envs`, which mjlab's own velocity tasks set to `0.2` and
+  `play=True` does not clear, so one resample in five differed), world-frame envs
+  (`rel_world_envs` and the `vel_command_w` state it reads), the `heading_command` gate,
+  and `init_velocity_prob`, now that the term is traced from mjlab's own body (see
+  Changed).
+- **`history_length` now stacks oldest frame first**, `[x_{t-n+1} … x_t]`, the order
+  mjlab's `CircularBuffer` flattens, where it counted back from the newest frame. Every
+  mjlab task carrying per-term or group history was handing its policy a correct-*width*
+  observation with time running backwards. **A hand-written config trained on the
+  newest-first layout must name its offsets to keep it:** `history_length=3` becomes
+  `history_steps=(0, 1, 2)`. The bundled examples are migrated; `history_steps` is
+  unchanged and still takes precedence. Neither the parity harness nor a build error could
+  have caught this: parity compares term bodies, and history is orchestration around them.
+- `PolicyRunner`'s group-level frame stack (the hand-authored `{components,
+  history_steps}` shape) stacks oldest-first too, so one rule holds across both history
+  paths. `history_interleaved` follows the stack, so its layout is now
+  `[a0_{t-n+1}, …, a0_t, a1_…]`.
+- A group's `history_length` replaces its terms' whenever it is set, `0` included, which
+  switches history off for the group as mjlab's `ObservationManager` does. An explicit `0`
+  used to read as "unset" and leave each term's own count standing.
+- An event's write now lands on each entity it was made on. The target was read off an
+  `asset_cfg` param, which mjlab's own terms carry but a task's term need not (a thrown
+  ball's launcher takes a plain `ball_name`), so it serialized as `null` and the runtime
+  wrote every root pose to the model's *first* free joint: in a robot-and-ball scene that
+  launched the robot across the floor while the ball never moved. The tracer now keys a
+  capture by `(entity, kind)`, as mjlab writes per entity, so one term may write several,
+  each target naming the graph outputs holding its values. `asset_cfg` stays the fallback
+  for a write the proxies could not attribute, and its `joint_ids` scope its own entity.
+- The runtime resolves a named entity's free joint through its **joint** name prefix, the
+  rule mjlab uses for an entity's own addresses (and the one `entityJointIds` already
+  applied). A namespaced model with no such entity now writes nothing rather than falling
+  back to the first free joint, which is how a thrown ball launched the robot. An
+  unprefixed model is still a single-entity scene, where the one free joint is the
+  entity's.
+- A root velocity write rotates its angular half into the body frame, as mjlab's
+  `write_root_velocity` does. Both halves arrive world-frame, but a free joint's `qvel`
+  holds world-frame linear and *body*-frame angular velocity, so the value spun the body
+  about the wrong axis for any orientation but identity.
+- `write_root_state_to_sim` traces, split into the pose and velocity writes mjlab splits
+  it into, and a `write_*_to_sim` the tracer does *not* capture is refused instead of
+  forwarded: forwarding it mutated the live tracing env, leaving every later term reading
+  a moved sim. A term walking `scene.entities` gets recording stand-ins for the same
+  reason.
+- mjlab's default `reset_scene_to_default` event no longer fails the build. It restores
+  every entity's default root and joint state, which the runtime's own reset already does
+  (`mj_resetData` to `qpos0`, or keyframe 0) before any `mode="reset"` event runs, so it is
+  emitted as a native no-op with that reason.
+- `run_parity` no longer feeds a graph inputs it does not declare, matching the runtime. A
+  read the body only *indexes* with (a tracking command's `time_steps`) is recorded as a
+  slot but folded in as a constant, so the export prunes it and ORT refused the feed,
+  failing the check for every term of a tracking task.
+- `OnnxCommand` / `OnnxEvent` no longer feed a graph inputs it does not declare. The export
+  prunes an input the body never reads, so a term that draws nothing has no `rand` and a
+  state field written without being read has no `prev_<field>`; ORT rejects either, taking
+  the whole scene down with `invalid input '...'`. Feeds are now filtered to the session's
+  own input names.
+- **Switching project pins the project it switched to.** The URL was written at each
+  call site from React state. The write that followed a project change is the one for the
+  scene that change loads, and it still held the *previous* project in its closure, so it
+  put the old one back. `?project=old&scene=new_projects_scene` is a view that cannot be
+  reopened: the reload resolves the old project, fails to find that scene in it, and lands
+  on the default. The address bar is now a projection of the live selection, written in
+  one place from all of it, so a selection that moves two things at once records both.
+  Clearing a policy clears `?policy` for the same reason, where the merge used to read
+  the cleared `null` as "unchanged" and leave the old name behind, and the parameters
+  are normalized on load rather than at the first interaction, so the address bar is
+  copyable as soon as the scene is up.
+- **A release bumps `package-lock.json` along with `package.json`.** `release.yml` set
+  the version in `_version.py` and `package.json` only, so the lockfile kept the old one
+  until the next `npm install` rewrote it in whatever commit came next, and 0.10.1 and
+  0.10.2 each needed a sync commit afterwards. The bump commit now carries the lockfile's
+  two version fields as well.
+
+### Security
+
+- **CI installs Python dependencies from `uv.lock` alone, and the lock waits three days
+  for a release.** `pytest.yml`, `ruff.yml` and `parity.yml` ran `uv pip install -e .[...]`,
+  which resolves every `>=` floor afresh, so a hijacked release (litellm 1.107.0 was live
+  for under two hours on 2026-10-21) would reach the next run that started inside its
+  window. Every workflow now runs `uv sync --locked` or `uv run --locked`, the `core` job
+  takes its pytest from a `test` dependency group, and `[tool.uv] exclude-newer = "3 days"`
+  keeps any release younger than that out of the lock, as the template's `.npmrc` already
+  does for npm. The test jobs now install the locked torch, the CUDA build on Linux,
+  where they used to fetch the CPU wheel outside the lock.
+- **Every GitHub Action is pinned to a commit SHA**, with its release tag in a comment: a
+  moved tag no longer changes what a workflow runs.
+- **Pillow 13.0.0, filelock 4.2.4 and virtualenv 21.14.12 in `uv.lock`**, for the
+  Dependabot advisories against Pillow < 13.0.0, filelock 3.20.4 to 4.2.0 and virtualenv
+  < 21.14.10.
+- **`export_checkpoint` reads a checkpoint with torch's restricted unpickler first.** It
+  and the `mjlab-to-mjswan` skill's `export_policy.py` loaded each `.pt` with
+  `weights_only=False`, as the runner's own load does, so a checkpoint from someone else's
+  W&B run, converted by `add_policy_wandb` (`only_latest=False`, the default) or
+  `from_mjlab(run_path=...)`, could run code on the machine that builds. Both now read it
+  with `weights_only=True` before the runner loads it, and refuse a checkpoint that names
+  a global outside torch's allowlist. rsl_rl and mjlab checkpoints export as before.
+- **The first engine build runs nodeenv in the template directory.** `python -m nodeenv`
+  and its pip fallback ran in the working directory, so a `nodeenv.py` there ran in their
+  place and a `setup.cfg` or `tox.ini` there could redirect the Node.js download, when
+  mjswan first ran inside a folder someone else supplied. They now run where the npm and
+  esbuild steps already did.
+- **The eslint pre-commit hook runs the template's locked eslint.** `npx eslint` ran from
+  the repository root, where the template's lockfile and `.npmrc` (`ignore-scripts` and the
+  three-day release-age cutoff) do not apply, so a commit touching template JS/TS
+  installed and ran whatever eslint the registry served last, install scripts included.
+  The hook now runs `src/mjswan/template/node_modules/.bin/eslint` and fails until
+  `npm ci` has run in the template.
+- **`mjswan serve` answers only for files inside the app directory.** A symbolic link in
+  a served directory someone else supplied was followed, so any local client of the
+  server could read the file or folder it named, and every directory without an
+  `index.html` was listed. A path that resolves outside the directory, and a directory
+  listing, now get 404; links within the directory still work.
+- **`mjswan publish` refuses a symbolic link in the build** before anything is uploaded.
+  It followed one, so a link in a dist someone else handed over uploaded the file it
+  named to mjswan Cloud.
+- **`save_document()` packs only the build's own files.** A manifest project id such as
+  `..` packed the files around the build directory, and a symbolic link packed what it
+  named. It now refuses an id `name2id` could not have written and any symbolic link,
+  before the `.swn` is created.
+- **`add_scene_hf` reads nothing from outside the downloaded repository.** A Hub MJCF's
+  asset paths, its `meshdir`, `texturedir` and `assetdir`, and the `<include>`, `<model>`
+  and `<flexcomp>` files MuJoCo opens while parsing were taken as written, so an absolute
+  or `../` path in someone else's repository put a file from the developer's disk into
+  the published `scene.mjz`, and a license-named file beside it into the scene directory.
+  The MJCF and every file it includes are now checked against the snapshot root before
+  MuJoCo reads them, tags by local name since MuJoCo ignores XML namespaces, and a path
+  outside it raises `ValueError`. Paths elsewhere in the same repository still work.

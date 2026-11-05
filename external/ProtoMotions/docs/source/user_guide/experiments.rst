@@ -1,0 +1,278 @@
+Experiments
+===========
+
+ProtoMotions implements several state-of-the-art algorithms for physics-based character animation.
+This page provides a high-level overview of each approach and when to use them.
+Every ``train_agent.py`` call needs ``--num-envs`` and ``--batch-size``; the
+example commands below include them, with per-GPU sizes.
+
+Mimic
+-----
+
+.. raw:: html
+
+   <video width="100%" controls>
+     <source src="../_static/smpl_mimic.mp4" type="video/mp4">
+     Your browser does not support the video tag.
+   </video>
+
+**Paper**: `DeepMimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character Skills <https://arxiv.org/abs/1804.02717>`__ (Peng et al., 2018)
+
+Mimic trains agents to imitate reference motion clips through reinforcement learning.
+The agent receives rewards for matching the reference pose at each timestep, learning to
+reproduce the motion while maintaining physical plausibility.
+
+**Experiment Variants**:
+
+* ``mlp.py`` - MLP policy for flat terrain
+* ``mlp_complex_terrain.py`` - MLP policy for complex terrains (stairs, slopes, etc.)
+* ``mlp_no_contact.py`` and ``mlp_complex_terrain_no_contact.py`` - the same two
+  recipes without contact bodies and without the contact-match reward. Use them
+  on IsaacGym, whose GPU pipeline reports one combined force per body and so
+  cannot run a recipe that declares contact bodies.
+* ``mlp_bm_l2c2.py`` - BeyondMimic policy with a torso anchor, L2C2 smoothness regularization, and a self-contact cost on non-foot/non-hand bodies, aimed at sim2real
+* ``fsq.py`` - FSQ tracker over max-coordinates proprioception and target poses
+* ``anatomical_soma_fsq_mimic.py`` - the FSQ tracker on the anatomical SOMA
+  humanoid with G1-class actuators (BeyondMimic actions, raw Gaussian tracking
+  rewards, physical randomization); see
+  :doc:`../robots/anatomic_soma`
+* ``../metatron/g1_teacher.py`` - five-body hybrid FSQ/PPO tracker for G1.
+  See the Metatron section below for training entry points.
+
+The BM recipe uses ``q_target = q_default + 0.25 * effort_limit / stiffness * action``
+without clipping the raw action or changing the robot's PD gains. Its action-rate
+reward is ``-0.1 * sum((action - previous_action)**2)`` on raw policy outputs,
+with no mean, square root, or timestep division. This is distinct from the L2C2
+model loss and from the processed-action L2 norm used by other recipes.
+
+The scale change applies to all newly built configs using
+``make_bm_pd_action_config``. The raw action-rate reward is selected explicitly
+by the BM L2C2 recipe; other recipes keep their existing reward bindings.
+Resume and inference use the action
+scales and reward bindings saved in ``resolved_configs.json``; existing pretrained
+configs are not rewritten. Use a new experiment name to train with this recipe.
+
+**Example command**:
+
+.. code-block:: bash
+
+   python protomotions/train_agent.py \
+       --experiment-path examples/experiments/mimic/mlp_no_contact.py \
+       --robot-name smpl \
+       --simulator isaacgym \
+       --motion-file <path_to_motion_file> \
+       --num-envs 4096 \
+       --batch-size 16384 \
+       --experiment-name smpl_mimic
+
+The command uses ``mlp_no_contact.py`` because it runs on IsaacGym, which
+cannot run a recipe that declares contact bodies; on IsaacLab use ``mlp.py``.
+
+Metatron
+--------
+
+The ``examples/experiments/metatron/`` directory groups the public entry points:
+
+* ``soma_teacher.py``: SOMA23 full-body FSQ/PPO animation tracking, retaining the
+  original motor gains and PD mapping without domain randomization.
+* ``g1_teacher.py``: five-body hybrid FSQ/PPO tracking with G1's robot settings.
+* ``g1_student.py``: basic single-teacher conditional-VAE distillation, documented
+  in :doc:`metatron_student`. No co-distillation runtime is required.
+* ``soma_student.py``: basic SOMA23 single-teacher Transformer conditional-VAE distillation.
+
+The directory README has complete training commands. Use matching retargeted
+motion data for each robot and a new experiment name for scratch training.
+The SAMP-capable **Metatron v1** G1 package is hosted on
+`Hugging Face <https://huggingface.co/nvidia/Metatron-v1/tree/main/G1>`__.
+Run ``python scripts/download_metatron.py`` to fetch its checkpoint, configs,
+model card and NVIDIA Open Model License to ``data/pretrained_models/metatron/G1/``.
+See :doc:`../getting_started/pretrained_models` for playback.
+Its bundled ``experiment_config.py`` is inference-only, not an exact
+training reproduction using the basic student recipe.
+
+ADD (Adversarial Differential Discriminators)
+---------------------------------------------
+
+**Paper**: `ADD: Physics-Based Motion Imitation with Adversarial Differential Discriminators <https://add-moo.github.io/>`__
+
+ADD is an adversarial approach to motion tracking that automatically balances multiple
+tracking objectives without manual reward weight tuning. It uses a discriminator to learn
+how to combine tracking errors dynamically.
+
+**Example command**:
+
+.. code-block:: bash
+
+   python protomotions/train_agent.py \
+       --experiment-path examples/experiments/add/mlp.py \
+       --robot-name smpl \
+       --simulator isaacgym \
+       --motion-file <path_to_motion_file> \
+       --num-envs 4096 \
+       --batch-size 16384 \
+       --experiment-name smpl_add
+
+MaskedMimic
+-----------
+
+.. raw:: html
+
+   <video width="100%" controls>
+     <source src="../_static/smpl_masked_mimic.mp4" type="video/mp4">
+     Your browser does not support the video tag.
+   </video>
+
+**Paper**: `MaskedMimic: Unified Physics-Based Character Control Through Masked Motion Inpainting <https://research.nvidia.com/labs/par/maskedmimic/>`__ (Tessler et al., SIGGRAPH Asia 2024)
+
+MaskedMimic formulates character control as a motion inpainting problem. A single unified
+controller learns to synthesize full-body motions from partial observations (masked keyframes,
+text descriptions, or scene information).
+
+.. note::
+
+   MaskedMimic distils a pre-trained Mimic expert: the supervised loss targets the expert's
+   actions. First train Mimic on multiple motions, then pass its checkpoint with
+   ``--expert-model-path``. The recipe reads the expert's config bundle beside the checkpoint
+   to add the expert's observations to the environment, so the path must be given on the
+   command line, not through ``--overrides``.
+
+**Example command**:
+
+.. code-block:: bash
+
+   python protomotions/train_agent.py \
+       --experiment-path examples/experiments/masked_mimic/transformer.py \
+       --robot-name smpl \
+       --simulator isaacgym \
+       --motion-file <path_to_motions> \
+       --expert-model-path <path_to_expert_model>/last.ckpt \
+       --num-envs 2048 \
+       --batch-size 4096 \
+       --experiment-name smpl_masked_mimic
+
+GPC and PEFT
+------------
+
+GPC trains a reusable discrete latent prior from tracker-derived FSQ tokens,
+then adapts the frozen prior to task skills with parameter-efficient fine-tuning.
+Use this path when you want a reusable generative motion prior that can be
+specialized with SFT, RLFT, or RLFT+AMP adapters.
+
+See :doc:`gpc` for the staged tracker, prior, SFT, RLFT, checkpoint, and
+inference workflow.
+
+.. raw:: html
+
+   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; align-items: start;">
+     <figure style="margin: 0;">
+       <video width="100%" controls>
+         <source src="../_static/gpc_prior_unconditional.mp4" type="video/mp4">
+         Your browser does not support the video tag.
+       </video>
+       <figcaption>Unconditional GPC prior</figcaption>
+     </figure>
+     <figure style="margin: 0;">
+       <video width="100%" controls>
+         <source src="../_static/gpc_location_peft.mp4" type="video/mp4">
+         Your browser does not support the video tag.
+       </video>
+       <figcaption>Location task after PEFT</figcaption>
+     </figure>
+   </div>
+
+AMP (Adversarial Motion Priors)
+-------------------------------
+
+.. raw:: html
+
+   <video width="100%" controls>
+     <source src="../_static/g1_amp.mp4" type="video/mp4">
+     Your browser does not support the video tag.
+   </video>
+
+**Paper**: `AMP: Adversarial Motion Priors for Stylized Physics-Based Character Control <https://arxiv.org/abs/2104.02180>`__ (Peng et al., 2021)
+
+AMP uses a discriminator to learn a motion prior from reference data. Instead of tracking
+specific poses, the agent learns to move in a style similar to the reference motions while
+accomplishing task objectives.
+
+**Example command**:
+
+.. code-block:: bash
+
+   python protomotions/train_agent.py \
+       --experiment-path examples/experiments/amp/mlp.py \
+       --robot-name g1 \
+       --simulator isaacgym \
+       --motion-file <path_to_motion> \
+       --num-envs 4096 \
+       --batch-size 16384 \
+       --experiment-name g1_amp
+
+Steering
+--------
+
+.. raw:: html
+
+   <video width="100%" controls>
+     <source src="../_static/g1_steering.mp4" type="video/mp4">
+     Your browser does not support the video tag.
+   </video>
+
+Steering combines AMP-style motion priors with directional control objectives. The agent
+learns to walk/run in user-specified directions while maintaining natural motion style.
+
+**Example command**:
+
+.. code-block:: bash
+
+   python protomotions/train_agent.py \
+       --experiment-path examples/experiments/steering/mlp.py \
+       --robot-name g1 \
+       --simulator isaacgym \
+       --motion-file <path_to_motion> \
+       --num-envs 4096 \
+       --batch-size 16384 \
+       --experiment-name g1_steering
+
+ASE (Adversarial Skill Embeddings)
+----------------------------------
+
+.. raw:: html
+
+   <video width="100%" controls>
+     <source src="../_static/smpl_ase.mp4" type="video/mp4">
+     Your browser does not support the video tag.
+   </video>
+
+**Paper**: `ASE: Large-Scale Reusable Adversarial Skill Embeddings for Physically Simulated Characters <https://arxiv.org/abs/2205.01906>`__ (Peng et al., 2022)
+
+ASE extends AMP by learning a latent skill space. The policy is conditioned on latent codes,
+allowing a single controller to perform many different skills by varying the latent input.
+
+.. note::
+
+   ASE requires a **diverse motion dataset** with many different motion types. It does not
+   work with a single motion clip - the skill embedding relies on having varied behaviors
+   to learn meaningful latent codes.
+
+**Example command**:
+
+.. code-block:: bash
+
+   python protomotions/train_agent.py \
+       --experiment-path examples/experiments/ase/mlp.py \
+       --robot-name smpl \
+       --simulator isaacgym \
+       --motion-file <path_to_motions> \
+       --num-envs 4096 \
+       --batch-size 16384 \
+       --experiment-name smpl_ase
+
+See Also
+--------
+
+* :doc:`configuration` - Configuration system
+* :doc:`gpc` - GPC and PEFT workflow
+* :doc:`../tutorials/code_tutorials` - Step-by-step tutorials
+* :doc:`../getting_started/quickstart` - Quick start guide

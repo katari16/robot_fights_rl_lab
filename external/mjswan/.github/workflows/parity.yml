@@ -1,0 +1,67 @@
+name: onnx parity
+
+# ADR 0005 §Consequences makes the numeric-parity check mandatory: every traced
+# term must reproduce its live mjlab output, every step. The default `test` job
+# cannot carry it — it installs only the `dev` extra and runs `-m "not slow"`, so
+# every parity test is skipped there. This job installs the `examples` extras
+# (mjlab / torch / onnxruntime) and compiles warp's CPU kernels once.
+#
+# On a PR that touches the tracer, the serializers or the resolved dependencies,
+# since those are what can silently change a traced term's numbers. Weekly on top
+# of that, aimed at *upstream* drift: mjlab moves fast, and a changed term
+# definition would otherwise surface as a mysterious runtime difference.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/mjswan/compile/**"
+      - "src/mjswan/build/mdp/**"
+      - "src/mjswan/mjlab/env.py"
+      - "tests/test_onnx_*.py"
+      - "uv.lock"
+      - ".github/workflows/parity.yml"
+  schedule:
+    # Mondays, 04:00 UTC.
+    - cron: "0 4 * * 1"
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    # The warp kernel compile plus seven mjlab envs is the bulk of this.
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          python-version: "3.12"
+          activate-environment: true
+
+      # From uv.lock only; see pytest.yml.
+      - name: Install dependencies
+        run: uv sync --locked --extra dev --extra examples
+
+      - name: Cache warp kernels
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          # mjlab compiles these on first env construction; without the cache
+          # every task in the sweep pays for it again.
+          path: ~/.cache/warp
+          key: warp-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: warp-${{ runner.os }}-
+
+      - name: Parity sweep across every reference task
+        env:
+          # No display on a runner, and mjlab imports mujoco's renderer eagerly.
+          MUJOCO_GL: disable
+        # No `-m` filter: the parity file is marked `slow` (excluded by the default
+        # job) and the command/event files gate themselves on `importorskip`
+        # instead, so a marker selector would silently pick up only some of
+        # them. Naming the files is what actually runs them all.
+        run: |
+          pytest tests/test_onnx_parity.py tests/test_onnx_command_parity.py \
+            tests/test_onnx_command_config.py tests/test_onnx_event_config.py \
+            tests/test_onnx_export_names.py tests/test_action_clip.py --tb=short -q

@@ -1,0 +1,86 @@
+# SOMA BONES-SEED FSQ Motion Tracker
+
+## License
+
+Model license: NVIDIA Open Model License
+
+The model weights, checkpoints, serialized model configurations and exported
+models are licensed under the [NVIDIA Open Model License](LICENSE.pdf).
+See [NOTICE.txt](NOTICE.txt) for attribution. Include both files when
+redistributing these artifacts.
+
+ProtoMotions source code remains Apache-2.0. Training datasets and robot assets
+have separate terms; this model license does not grant rights to those materials.
+
+## Overview
+
+This is a SOMA motion tracker with a finite-scalar-quantization (FSQ) bottleneck.
+It maps tracking observations to discrete latent codes and decodes those codes
+into low-level actions. This tracker supplies the motion vocabulary used by the
+SOMA GPC prior.
+
+| Field | Value |
+| --- | --- |
+| Family | PPO motion tracker with FSQ |
+| Robot | SOMA 23-body humanoid, 66 actions |
+| Motion corpus | BONES-SEED |
+| Primary inference artifact | `inference_last.ckpt` |
+
+## Intended Use
+
+- Track BONES-SEED motion with a discrete FSQ action bottleneck.
+- Encode target actions into discrete labels for GPC prior training.
+- Supply the decoder embedded into SOMA GPC priors and PEFT workflows.
+
+## Training
+
+- Training simulator: **IsaacLab**.
+- Training method: PPO motion tracking with an FSQ actor bottleneck.
+- Training data: BONES-SEED motion represented with the SOMA skeleton.
+- Training environment: flat terrain with maximum-coordinate current state and
+  future tracking targets.
+
+## Inputs and Outputs
+
+The tracker consumes the current SOMA maximum-coordinate state and future target
+poses. Its actor quantizes a latent representation into FSQ codes and decodes
+them into 66 joint actions.
+
+Exact codebook levels, scalar grouping, normalization statistics, target
+horizons, and dimensions are stored in `resolved_configs.json`.
+
+## Artifacts
+
+- `inference_last.ckpt`: model-only inference tracker artifact used by the public
+  GPC configuration.
+- `experiment_config.py`: the tracker experiment wiring.
+- `config.yaml`: the portable launcher arguments that regenerate the bundle.
+- `resolved_configs.json`: the self-contained v2 runtime configuration bundle.
+- `provenance.json`: checkpoint provenance (sha256, byte count, tensor count).
+
+## Runtime Support
+
+- Training simulator: **IsaacLab**.
+- Simulator expectation: **Training simulator only**.
+- Use the SOMA robot, target-pose horizon, and FSQ decoder contract saved with
+  this checkpoint.
+
+This model was not trained with the full transfer-oriented combination of
+friction, joint-state, observation-noise, and push randomization. Cross-simulator
+transfer should not be assumed.
+
+## Limitations
+
+- The FSQ latent layout is part of the checkpoint contract and cannot be mixed
+  with a differently configured prior or tracker.
+- The model is a tracker and GPC dependency, not an unconditional motion prior.
+- No cross-simulator performance guarantee is provided.
+- Performance depends on matching the SOMA asset, control rate, target horizon,
+  and normalization state.
+
+## Provenance
+
+This card was curated from the shipped full and inference checkpoint inventory,
+serialized configurations, public FSQ experiment definitions, BONES-SEED
+documentation, and the public GPC guide. Machine-specific paths and internal
+experiment identifiers are intentionally omitted.

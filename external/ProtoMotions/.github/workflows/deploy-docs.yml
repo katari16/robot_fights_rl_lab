@@ -1,0 +1,134 @@
+name: Deploy Sphinx Documentation to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'demos/metatron/**'
+      - 'scripts/install_metatron_demo.py'
+      - 'demos/g1-racer/**'
+      - 'scripts/install_g1_racer.py'
+      - 'demos/g1-football/**'
+      - 'scripts/install_g1_football.py'
+      - '.github/workflows/deploy-docs.yml'
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # The documentation site is served from the public repository, which has
+    # GitHub Pages enabled. This workflow ships to public unchanged, but the
+    # development repository and any fork have no Pages site, so the deploy
+    # would 404 on every docs change. Restrict it to the canonical repo.
+    if: github.repository == 'NVlabs/ProtoMotions'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      # lfs: false above, then fetch only what the docs actually embed: seven
+      # tutorial videos, about 31 MB. A full LFS checkout here pulls ~4.9 GB --
+      # overwhelmingly model checkpoints no page references -- against the
+      # organisation's shared LFS bandwidth quota, on every docs change. The
+      # images are not affected either way; they are in the pack, not LFS.
+      - name: Fetch the media the docs embed
+        run: git lfs pull --include="docs/source/_static/*"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install documentation dependencies
+        run: |
+          pip install -r docs/requirements.txt
+
+      - name: Check compiled demo release readiness
+        id: demo
+        run: |
+          # Assign first so a failing status script fails the step; inside the
+          # echo its non-zero exit would be masked and ready would read empty.
+          ready=$(python scripts/install_metatron_demo.py --status)
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+      - name: Check G1 Racer release readiness
+        id: racer
+        run: |
+          # Assign first so a failing status script fails the step.
+          ready=$(python scripts/install_g1_racer.py --status)
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch approved compiled demo only
+        if: steps.demo.outputs.ready == 'true'
+        run: git lfs pull --include="demos/metatron/demo.zip"
+
+      - name: Check G1 Football release readiness
+        id: football
+        run: |
+          # A missing candidate during integration is not a public release.
+          # Once metadata exists, invalid metadata must fail this step.
+          if test -f demos/g1-football/bundle.json; then
+            ready=$(python scripts/install_g1_football.py --status)
+          else
+            ready=false
+          fi
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch approved G1 Football game only
+        if: steps.football.outputs.ready == 'true'
+        run: git lfs pull --include="demos/g1-football/game.zip"
+
+      - name: Fetch approved G1 Racer game only
+        if: steps.racer.outputs.ready == 'true'
+        run: git lfs pull --include="demos/g1-racer/game.zip"
+
+      - name: Build Sphinx documentation
+        run: |
+          cd docs
+          make html
+
+      - name: Install approved demo beside the docs
+        if: steps.demo.outputs.ready == 'true'
+        run: python scripts/install_metatron_demo.py --out docs/build/html/demos/metatron
+
+      - name: Install approved G1 Racer beside the docs
+        if: steps.racer.outputs.ready == 'true'
+        run: python scripts/install_g1_racer.py --out docs/build/html/demos/g1-racer
+
+      - name: Install approved G1 Football beside the docs
+        if: steps.football.outputs.ready == 'true'
+        run: python scripts/install_g1_football.py --out docs/build/html/demos/g1-football
+
+      - name: Check Pages size budget
+        run: test "$(du -sb docs/build/html | cut -f1)" -lt 900000000
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/build/html'
+
+  deploy:
+    if: github.repository == 'NVlabs/ProtoMotions'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

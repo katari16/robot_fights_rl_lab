@@ -1,0 +1,523 @@
+/**
+ * `mjswan/manifest`: parse a build's `manifest.json` + a byte source into a typed
+ * catalog of loadable scenes/policies/splats/skins (ADR 0004 §1, §9; ADR 0006). Framework-free;
+ * shared by the in-repo React app and mjswan Cloud. The engine itself knows nothing
+ * about the manifest; the app owns the catalog and calls engine verbs.
+ *
+ * The manifest is the one descriptor of a document: every key `snake_case`, every path
+ * under a scene entry relative to `<project-id>/<scene-id>/`, under a project's `work`
+ * relative to `<project-id>/`, the top-level `plugins` relative to the document root.
+ */
+import { resolveBytes, type Bytes } from '../core/utils/bytes';
+import type { ViewerConfig } from '../core/engine/viewer_config';
+import type { EventConfig, TerrainData } from '../core/event/EventBase';
+import type { SplatTransform } from '../core/scene/splat';
+import type { SkinConfig } from '../core/skin/config';
+import { policyGraphRefs } from '../core/onnx/graphRefs';
+import type { PolicyInput, SceneInput, SkinInput, SplatInput } from '../engine/types';
+
+/** Maps a document-relative path (e.g. `demo/humanoid/scene.mjz`) to bytes. */
+export type ByteSource = (relPath: string) => Bytes;
+
+// ── manifest.json shape (Python Builder ↔ consumer contract, ADR 0006) ───────
+export interface ManifestCamera {
+  lookat?: [number, number, number];
+  distance?: number;
+  fovy?: number;
+  elevation?: number;
+  azimuth?: number;
+  origin_type?: 'AUTO' | 'WORLD' | 'ASSET_ROOT' | 'ASSET_BODY';
+  entity_name?: string;
+  body_name?: string;
+  enable_reflections?: boolean;
+  enable_shadows?: boolean;
+  height?: number;
+  width?: number;
+}
+export interface ManifestSplat {
+  id: string;
+  name: string;
+  /** Scene-relative path of a bundled `.spz` (`assets/<id>.spz`). */
+  path?: string;
+  /** External URL of an unbundled `.spz`. Exactly one of `path`/`url` is set. */
+  url?: string;
+  scale?: number;
+  x_offset?: number;
+  y_offset?: number;
+  z_offset?: number;
+  roll?: number;
+  pitch?: number;
+  yaw?: number;
+  collider_url?: string;
+  control?: boolean;
+}
+export interface ManifestSkin extends SkinConfig {
+  id: string;
+  name: string;
+  /** Scene-relative path of the bundled file (`assets/<id>.vrm` or `assets/<id>.glb`). */
+  path: string;
+}
+export interface ManifestMotion {
+  name: string;
+  /** Scene-relative path of the bundled `.npz` (`assets/<name>.npz`). */
+  path: string;
+  default?: boolean;
+  /** Arrays of the `.npz`, one row per frame, the tracking command serves as state fields. */
+  frame_fields?: string[];
+  /** Heading the motion selector lists it under. */
+  group?: string;
+  [key: string]: unknown;
+}
+/**
+ * One MDP: the five term sets a policy runs against, traced. Term entries keep the
+ * shape ADR 0005 §1 gave them; every `onnx`/`fused` ref is scene-relative.
+ */
+export interface ManifestMdp {
+  id: string;
+  observations?: Record<string, unknown>;
+  actions?: Record<string, unknown>;
+  terminations?: Record<string, unknown>;
+  commands?: Record<string, unknown>;
+  events?: EventConfig[];
+}
+export interface ManifestPolicy {
+  id: string;
+  name: string;
+  default?: boolean;
+  /** The `ManifestMdp.id` this policy runs against; always written. */
+  mdp: string;
+  /** Scene-relative path of the network (`policy/<id>.onnx`). */
+  onnx: string;
+  /** ONNX input slot table; absent means the single default slot (ADR 0006 §5). */
+  in_keys?: string[];
+  out_keys?: (string | string[])[];
+  motions?: ManifestMotion[];
+  /** The checkpoint's own metadata: `policy_joint_names`, `default_joint_pos`, … */
+  [key: string]: unknown;
+}
+/** A license file the build wrote (ADR 0007), named and identified at build time. */
+export interface ManifestLicense {
+  /** Path of the `LICENSE` file. */
+  license?: string;
+  /** Its SPDX id; `LicenseRef-custom` for a text that could not be identified. */
+  spdx?: string;
+  /** `Non-commercial`, `Share-alike`, `No derivatives` or `Copyleft`, when restricted. */
+  restriction?: string;
+  /** Its first line naming a holder, when it has one. */
+  copyright?: string;
+  /** Path of the `NOTICE` file. */
+  notice?: string;
+}
+/** One third-party component of a scene: `LICENSE.<component>` / `NOTICE.<component>`. */
+export interface ManifestCredit extends ManifestLicense {
+  component: string;
+  /** The skin it belongs to, by id. */
+  skin?: string;
+  /** A VRM skin's terms as its own `meta` states them. */
+  vrm?: { name?: string; authors: string[]; license?: string; other_license_url?: string };
+}
+export interface ManifestScene {
+  id: string;
+  name: string;
+  /**
+   * Scene-relative model path, named for the argument the scene was built from:
+   * `scene.mjz` for `add_scene(spec=...)`, `scene.mjb` for `add_scene(model=...)`.
+   */
+  scene: string;
+  /** Seconds per control step, from the task (mjlab's `timestep * decimation`). */
+  control_dt?: number;
+  camera?: ManifestCamera;
+  terrain_data?: TerrainData;
+  splat_section?: boolean;
+  splats?: ManifestSplat[];
+  skins?: ManifestSkin[];
+  credits?: ManifestCredit[];
+  mdps: ManifestMdp[];
+  policies: ManifestPolicy[];
+}
+export interface ManifestProject {
+  /** `name2id(name)`, unique in the document: the project's directory and `?project=` value. */
+  id: string;
+  name: string;
+  /** At most one project sets it; none set means the first in document order. */
+  default?: boolean;
+  /** The work's own `LICENSE` / `NOTICE`. */
+  work?: ManifestLicense;
+  scenes: ManifestScene[];
+}
+/** A node of mjlab's viewer GUI as recorded at build time; the app fills a `slot` from engine state. */
+export type ViewerGuiNode =
+  | { type: 'folder'; label: string; children: ViewerGuiNode[] }
+  | { type: 'checkbox'; label: string; default?: boolean; hint?: string }
+  | {
+      type: 'slider';
+      label: string;
+      min?: number;
+      max?: number;
+      step?: number;
+      default?: number;
+      hint?: string;
+    }
+  | { type: 'slot'; name: string };
+
+export interface Manifest {
+  /**
+   * Document format (ADR 0006 §7): the structure of the build, bumped only for a break an
+   * older reader would misread. Distinct from `version`, the mjswan release, which is
+   * never a gate here.
+   */
+  format: number;
+  version: string;
+  uses_custom_js?: boolean;
+  /** Document-root-relative path to the runtime custom-MDP plugin ESM (custom-TS builds). */
+  plugins?: string;
+  /** mjlab's viewer Scene section; absent from a build made without mjlab. */
+  viewer_gui?: ViewerGuiNode[];
+  projects: ManifestProject[];
+}
+
+// ── catalog (what the app holds) ─────────────────────────────────────────────
+export interface PolicyEntry {
+  id: string;
+  name: string;
+  default: boolean;
+  motions: Array<{ name: string; default: boolean; group?: string }>;
+  /** Assemble the engine PolicyInput: its manifest entry merged with its MDP, plus bytes. */
+  build(): Promise<PolicyInput>;
+}
+export interface SplatEntry {
+  id: string;
+  name: string;
+  /** Whether the UI should show calibration controls. */
+  control: boolean;
+  /** Initial placement, for seeding a calibration UI (engine.calibrateSplat). */
+  transform: SplatTransform;
+  build(): Promise<SplatInput>;
+}
+export interface SkinEntry {
+  id: string;
+  name: string;
+  build(): Promise<SkinInput>;
+}
+/** A license, its texts fetched on demand. */
+export interface LicenseEntry {
+  spdx?: string;
+  restriction?: string;
+  copyright?: string;
+  license?: () => Promise<string>;
+  notice?: () => Promise<string>;
+}
+export interface CreditEntry extends LicenseEntry {
+  component: string;
+  skin?: string;
+  vrm?: { name?: string; authors: string[]; license?: string; otherLicenseUrl?: string };
+}
+export interface SceneEntry {
+  id: string;
+  name: string;
+  camera?: ViewerConfig;
+  splatSection: boolean;
+  policies: PolicyEntry[];
+  splats: SplatEntry[];
+  skins: SkinEntry[];
+  /** Its third-party components, every skin's included, in manifest order. */
+  credits: CreditEntry[];
+  /**
+   * Assemble a full SceneInput for a chosen policy/splat/skin (ids). An omitted policy is
+   * the default one; an omitted splat or skin is none.
+   */
+  buildScene(opts?: {
+    policy?: string | null;
+    splat?: string | null;
+    skin?: string | null;
+  }): Promise<SceneInput>;
+}
+export interface ProjectCatalog {
+  id: string;
+  name: string;
+  /** The project the app opens on. Exactly one entry in a catalog has it set. */
+  default: boolean;
+  /** The work's own license. */
+  work?: LicenseEntry;
+  scenes: SceneEntry[];
+}
+export interface Catalog {
+  /** All projects in the build; the default first, so `projects[0]` is the one to open. */
+  projects: ProjectCatalog[];
+  /**
+   * Document-root-relative path to the author custom-MDP plugin ESM, if any. A trusted
+   * app imports it and passes the exports as {@link EnginePlugins}; mjswan Cloud ignores it.
+   */
+  pluginsPath?: string;
+  /** {@link Manifest.viewer_gui}. */
+  viewerGui?: ViewerGuiNode[];
+}
+
+/**
+ * The id a name sanitizes to: Python's `name2id`, character for character, pinned by
+ * `name2id_cases.json`, which both test suites read. A case they disagree on is a link
+ * that opens the wrong scene (ADR 0006 §4).
+ */
+export function sanitizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+/**
+ * The newest document format this reader understands (ADR 0006 §7). A ceiling: every
+ * earlier format still parses. 2 added `sim` input slots and their `rows`; 3 made
+ * `camera.azimuth` MuJoCo's, the direction the camera looks; 4 added the `env` input
+ * slot that `time_out` is traced through; 5 the `action` input slot that `last_action`
+ * is traced through, the `model` input slot and write target that model-field
+ * randomization is traced through, and a command graph's `reset_mask`, gated writes and
+ * `root_velocity_b` write; 6 an action term's traced `process` and `reset` graphs, its
+ * `interpolate`, `hold_s` and `delay`, the `joint_position_relative` type, and the
+ * `action_term` input slot (ADR 0009); 7 a scene's `skins`; 8 a motion's `frame_fields`.
+ */
+export const MAX_DOCUMENT_FORMAT = 8;
+
+/**
+ * Refuse a document this reader cannot read: one without a `format`, or one newer than it
+ * knows. `version` is provenance a host may pick an engine by, never a gate here.
+ */
+function checkFormat(parsed: Manifest): void {
+  const format = parsed.format;
+  if (format === undefined) {
+    throw new Error(
+      'mjswan/manifest: this build predates document format 1 (a root assets/config.json ' +
+        'rather than manifest.json). Rebuild it with a current mjswan.',
+    );
+  }
+  if (!Number.isInteger(format) || format < 1) {
+    throw new Error(`mjswan/manifest: document format ${JSON.stringify(format)} is not a format number.`);
+  }
+  if (format > MAX_DOCUMENT_FORMAT) {
+    throw new Error(
+      `mjswan/manifest: this document is format ${format} (written by mjswan ${parsed.version}), ` +
+        `but this engine reads up to format ${MAX_DOCUMENT_FORMAT}. Update the engine.`,
+    );
+  }
+}
+
+function inScene(dir: string, rel: string): string {
+  return `${dir}${rel}`.replace(/\/+/g, '/');
+}
+
+function toLicenseEntry(dir: string, entry: ManifestLicense, source: ByteSource): LicenseEntry {
+  const text = (rel: string) => async () =>
+    new TextDecoder().decode(await resolveBytes(source(inScene(dir, rel))));
+  return {
+    spdx: entry.spdx,
+    restriction: entry.restriction,
+    copyright: entry.copyright,
+    license: entry.license ? text(entry.license) : undefined,
+    notice: entry.notice ? text(entry.notice) : undefined,
+  };
+}
+
+function toCreditEntry(dir: string, credit: ManifestCredit, source: ByteSource): CreditEntry {
+  const vrm = credit.vrm && {
+    name: credit.vrm.name,
+    authors: credit.vrm.authors,
+    license: credit.vrm.license,
+    otherLicenseUrl: credit.vrm.other_license_url,
+  };
+  return { ...toLicenseEntry(dir, credit, source), component: credit.component, skin: credit.skin, vrm };
+}
+
+/** Lazy-fetch an absolute/external URL as bytes (for splats hosted off-build). */
+function urlBytes(url: string): Bytes {
+  return async () => {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`mjswan/manifest: failed to fetch ${url}: ${res.status}`);
+    }
+    return res.arrayBuffer();
+  };
+}
+
+/** The manifest's snake_case camera entry as the engine's `ViewerConfig`. */
+function toViewerConfig(camera: ManifestCamera | undefined, format: number): ViewerConfig | undefined {
+  if (!camera) return undefined;
+  const view: ViewerConfig = {};
+  if (camera.lookat !== undefined) view.lookat = camera.lookat;
+  if (camera.distance !== undefined) view.distance = camera.distance;
+  if (camera.fovy !== undefined) view.fovy = camera.fovy;
+  if (camera.elevation !== undefined) view.elevation = camera.elevation;
+  // Before format 3 the azimuth pointed at the camera rather than the way it looks.
+  if (camera.azimuth !== undefined) view.azimuth = format < 3 ? camera.azimuth + 180 : camera.azimuth;
+  if (camera.origin_type !== undefined) view.originType = camera.origin_type;
+  if (camera.entity_name !== undefined) view.entityName = camera.entity_name;
+  if (camera.body_name !== undefined) view.bodyName = camera.body_name;
+  if (camera.enable_reflections !== undefined) view.enableReflections = camera.enable_reflections;
+  if (camera.enable_shadows !== undefined) view.enableShadows = camera.enable_shadows;
+  if (camera.height !== undefined) view.height = camera.height;
+  if (camera.width !== undefined) view.width = camera.width;
+  return view;
+}
+
+function splatTransform(splat: ManifestSplat): SplatTransform {
+  return {
+    scale: splat.scale,
+    xOffset: splat.x_offset,
+    yOffset: splat.y_offset,
+    zOffset: splat.z_offset,
+    roll: splat.roll,
+    pitch: splat.pitch,
+    yaw: splat.yaw,
+  };
+}
+
+function buildSplat(dir: string, splat: ManifestSplat, source: ByteSource): SplatInput {
+  const data = splat.path ? source(inScene(dir, splat.path)) : urlBytes(splat.url!);
+  const collider = splat.collider_url
+    ? (/^[a-z]+:\/\//i.test(splat.collider_url)
+        ? urlBytes(splat.collider_url)
+        : source(inScene(dir, splat.collider_url)))
+    : undefined;
+  return { data, collider, transform: splatTransform(splat) };
+}
+
+/**
+ * Byte sources for a config's traced term graphs, keyed scene-relative, which is how the
+ * runtime looks a session up (ADR 0005 §4). The source is asked for the document-relative
+ * path instead.
+ */
+function graphBytes(refs: string[], dir: string, source: ByteSource): Record<string, Bytes> {
+  const graphs: Record<string, Bytes> = {};
+  for (const ref of refs) graphs[ref] = source(inScene(dir, ref));
+  return graphs;
+}
+
+/** The engine's policy config: the policy entry's own fields plus its MDP's term sets. */
+function policyConfig(scene: ManifestScene, policy: ManifestPolicy): Record<string, unknown> {
+  const mdp = scene.mdps.find((m) => m.id === policy.mdp);
+  if (!mdp) {
+    throw new Error(
+      `mjswan/manifest: policy "${policy.name}" refers to mdp "${policy.mdp}", ` +
+        `which scene "${scene.name}" does not declare.`,
+    );
+  }
+  // Bookkeeping keys stay out of what the engine interprets; the network arrives as bytes.
+  const own = Object.fromEntries(
+    Object.entries(policy).filter(([key]) => !['id', 'mdp', 'onnx'].includes(key)),
+  );
+  const sections = Object.fromEntries(Object.entries(mdp).filter(([key]) => key !== 'id'));
+  return { ...own, ...sections };
+}
+
+function buildPolicy(
+  dir: string,
+  scene: ManifestScene,
+  policy: ManifestPolicy,
+  source: ByteSource,
+): PolicyInput {
+  const config = policyConfig(scene, policy);
+  const motions = (policy.motions ?? []).map((m) => ({
+    name: m.name,
+    data: source(inScene(dir, m.path)),
+    default: m.default,
+  }));
+  return {
+    config,
+    onnx: source(inScene(dir, policy.onnx)),
+    graphs: graphBytes(policyGraphRefs(config), dir, source),
+    motions,
+  };
+}
+
+function toSceneEntry(
+  project: ManifestProject,
+  scene: ManifestScene,
+  source: ByteSource,
+  format: number,
+): SceneEntry {
+  // `<project-id>/<scene-id>/`: the base every path under a scene entry resolves against.
+  const dir = `${project.id}/${scene.id}/`;
+
+  const policies: PolicyEntry[] = scene.policies.map((p) => ({
+    id: p.id,
+    name: p.name,
+    default: p.default ?? false,
+    motions: (p.motions ?? []).map((m) => ({ name: m.name, default: m.default ?? false, group: m.group })),
+    build: async () => buildPolicy(dir, scene, p, source),
+  }));
+
+  const splats: SplatEntry[] = (scene.splats ?? []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    control: s.control ?? false,
+    transform: splatTransform(s),
+    build: async () => buildSplat(dir, s, source),
+  }));
+
+  const buildSkin = (skin: ManifestSkin): SkinInput => ({
+    data: source(inScene(dir, skin.path)),
+    config: skin,
+  });
+  const skins: SkinEntry[] = (scene.skins ?? []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    build: async () => buildSkin(s),
+  }));
+
+  return {
+    id: scene.id,
+    name: scene.name,
+    camera: toViewerConfig(scene.camera, format),
+    splatSection: scene.splat_section ?? false,
+    policies,
+    splats,
+    skins,
+    credits: (scene.credits ?? []).map((c) => toCreditEntry(dir, c, source)),
+    buildScene: async (opts) => {
+      const policyId = opts?.policy;
+      const policy =
+        policyId == null
+          ? (scene.policies.find((p) => p.default) ?? scene.policies[0])
+          : scene.policies.find((p) => p.id === policyId);
+      const splatId = opts?.splat;
+      const splat = splatId == null ? undefined : scene.splats?.find((s) => s.id === splatId);
+      const skinId = opts?.skin;
+      const skin = skinId == null ? undefined : scene.skins?.find((s) => s.id === skinId);
+      // Events travel with the policy, inside its MDP (ADR 0006 §3), so the scene carries
+      // only `terrainData`, which every MDP on it may draw from.
+      return {
+        model: source(inScene(dir, scene.scene)),
+        modelFormat: scene.scene.endsWith('.mjb') ? 'mjb' : 'mjz',
+        policy: policy ? buildPolicy(dir, scene, policy, source) : null,
+        splat: splat ? buildSplat(dir, splat, source) : null,
+        skin: skin ? buildSkin(skin) : null,
+        viewer: toViewerConfig(scene.camera, format),
+        terrainData: scene.terrain_data,
+        controlDt: scene.control_dt,
+      };
+    },
+  };
+}
+
+/** Parse a build's `manifest.json` (object or JSON string) into a {@link Catalog}. */
+export function parseManifest(manifest: Manifest | string, source: ByteSource): Catalog {
+  const parsed: Manifest = typeof manifest === 'string' ? JSON.parse(manifest) : manifest;
+  checkFormat(parsed);
+  if (!parsed.projects?.length) {
+    throw new Error('mjswan/manifest: manifest.json has no projects.');
+  }
+  // The default project first, so `projects[0]` is always the one to open on. The build
+  // refuses two defaults; with none, document order already puts the right one first.
+  const flagged = parsed.projects.find((p) => p.default) ?? parsed.projects[0];
+  const ordered = [flagged, ...parsed.projects.filter((p) => p !== flagged)];
+  return {
+    projects: ordered.map((project) => ({
+      id: project.id,
+      name: project.name,
+      default: project === flagged,
+      work: project.work && toLicenseEntry(`${project.id}/`, project.work, source),
+      scenes: project.scenes.map((scene) => toSceneEntry(project, scene, source, parsed.format)),
+    })),
+    pluginsPath: parsed.plugins,
+    viewerGui: parsed.viewer_gui,
+  };
+}

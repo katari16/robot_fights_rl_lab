@@ -1,0 +1,271 @@
+---
+icon: octicons/screen-full-16
+---
+
+# Embedding
+
+A built mjswan app is a static site, so embedding it is mostly a question of how much
+control you want over the surrounding page.
+
+<div class="grid cards" markdown>
+
+-   :material-application-outline:{ .lg .middle } __iframe__
+
+    ---
+
+    One tag, zero build tooling. The app brings its own UI. Best for articles, blogs, and
+    docs pages.
+
+-   :simple-googlecolab:{ .lg .middle } __Colab / Jupyter__
+
+    ---
+
+    `app.launch()` detects Colab and renders an inline iframe instead of blocking.
+
+-   :simple-javascript:{ .lg .middle } __npm engine__
+
+    ---
+
+    `createEngine` in your own page, with your own controls. No mjswan UI at all.
+
+</div>
+
+## iframe
+
+After hosting your app ([Deployment](deployment.md)) or publishing it
+([mjswan Cloud](publishing.md)), drop it into any page:
+
+```html
+<iframe
+  src="https://mjswan-gentlehumanoid.pages.dev?panel=0"
+  title="mjswan simulation"
+  loading="lazy"
+  allow="xr-spatial-tracking; fullscreen"
+  style="width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 0.4rem;">
+</iframe>
+```
+
+That exact markup produces this — a real motion-tracking policy running in your browser,
+inside this page:
+
+<iframe
+  src="https://mjswan-gentlehumanoid.pages.dev?panel=0"
+  title="mjswan simulation"
+  loading="lazy"
+  allow="xr-spatial-tracking; fullscreen"
+  style="width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 0.4rem;">
+</iframe>
+
+/// caption
+The [GentleHumanoid](https://mjswan-gentlehumanoid.pages.dev/){:target="_blank"} demo embedded in this page. Try interacting with it.
+///
+
+`loading="lazy"` matters more here than for a normal iframe: the app downloads a MuJoCo
+WASM module and starts simulating as soon as it loads, so deferring that until it scrolls
+into view keeps the host page cheap. `allow="xr-spatial-tracking"` is what lets the
+embedded viewer enter VR.
+
+!!! warning "If the frame comes up blank, check `frame-ancestors`"
+    Framing is controlled by the **embedded** site, not the host page. If its server sends
+    a `Content-Security-Policy: frame-ancestors …` (or a legacy `X-Frame-Options`) that
+    does not list your origin, the browser blocks the load and logs:
+
+    ```
+    Framing 'https://example.com/' violates the following Content Security Policy
+    directive: "frame-ancestors 'self' …". The request has been blocked.
+    ```
+
+    mjswan itself never emits that header — a plain `builder.build()` output is frameable
+    from anywhere, and so is GitHub Pages. It comes from the host: a Cloudflare Pages
+    `_headers` file, an nginx `add_header`, or a dashboard setting. Widen the directive to
+    include the origin you are embedding from, or host a copy you control.
+
+### Query parameters
+
+The bundled app reads query parameters, so an embed can open on exactly the scene, policy
+and chrome you mean rather than the first thing in the build:
+
+| Parameter | Effect |
+|---|---|
+| `project` | Select a project by id — its sanitized name, `newton_s_cradle` for `"Newton's Cradle"`. The display name works too; it is sanitized the same way. Defaults to the project marked `default=True`. |
+| `scene` | Select a scene by id. |
+| `policy` | Select a policy by id. Defaults to the one marked `default=True`. |
+| `skin` | Select a skin by id. Defaults to the scene's first; `skin=` (empty) opens on none. |
+| `panel` | `panel=0` starts with the control panel hidden. Useful in a small iframe. |
+| `debug` | `debug=0` starts with the panel's Debug Viz **Enabled** checkbox off, hiding every debug drawing (the motion-tracking ghost, velocity arrows, height-scan hits, the robot under a skin). A skin stays shown. |
+| `xray` | `xray=1` starts with Debug Viz's **Xray** switch on, drawing the robot see-through over its skin. |
+| `manifest` | Load a `manifest.json` from another URL entirely, relative to the page. |
+
+`panel` and `debug` are booleans read as "off only when exactly `0`", `xray` as "on only
+when exactly `1`", and the app writes the current state back into the URL, so you can
+arrange a view by hand and copy the address bar into your `src`.
+
+A hidden panel does not hide the scene's credits: `I` opens the About dialog, whose
+**Credits** tab lists the licenses and notices of what is on screen.
+
+```html
+<iframe src="https://ttktjmt.github.io/mjswan/?project=showcase&scene=g1_on_street&policy=locomotion&panel=0" …></iframe>
+```
+
+### Entering VR and AR
+
+On a device that can start a WebXR session, the control panel has a collapsed **WebXR**
+section: **Enter VR**, **Start AR** where the device supports passthrough, and the **Hand
+tracking** switch. Where no session can start, the section is absent.
+
+### Moving around in VR
+
+**Enter VR** stands you in the scene, and the controller sticks take you from there: the
+left stick slides you along the way you are looking, and the right stick turns you for as
+long as you hold it, as fast as you push it. Turns pivot on your head rather
+than on the play area's centre, so turning does not swing you sideways through the scene.
+Smooth turning is easier to aim with than snapping to fixed steps and harder on the
+stomach, which is why the rate is a modest 90° a second at full deflection.
+
+You arrive where the scene's viewer config points its desktop camera, which is beside the
+tracked body by default — not at the world origin, which on a generated terrain is the
+generator's base plane rather than a place to stand. From there the view is yours: it does
+not follow the body around, so a robot that walks off walks off and you go after it with
+the stick. Your floor comes from a ray cast straight down at your feet, so you stand on
+the ground at your own height rather than on the headset's idea of z = 0, which is what
+keeps you on top of a slope instead of inside it.
+
+### Hand tracking in VR
+
+**Hand tracking** in the WebXR section makes a headset's tracked hands part of the physics
+rather than a pair of floating models. In VR, a Quest 3 can bat a scene's objects around,
+rest one on an open palm, and pick one up: pinch to grab, release to drop. What you see is
+three.js's own hand model, and the physics under it is sized to the wearer's hand rather
+than to a nominal adult one.
+
+The hands are bodies the scene is compiled with, so flipping the switch does nothing on
+its own: the scene is rebuilt with them when you enter VR or AR, or at the next scene you
+open, whichever comes first. That rebuild keeps your policy, motion and camera and starts
+the simulation over. The switch is off every time the page opens, and nothing about it
+goes into the URL.
+
+It is off by default: a scene with the hands costs roughly 1.6x per physics step, and the
+headset must grant the `hand-tracking` feature. **Meta Quest** is the recommended headset,
+since its browser ships WebXR hand tracking with nothing to install. When you drive the
+engine yourself, `engine.xr.setHandTracking(true)` is the same switch (see
+[WebXR](../api/engine.md#webxr)).
+
+Some scenes cannot take the hands, and the switch is greyed there with the reason on
+hover: a scene added as `add_scene(model=...)` (a compiled `.mjb`, with no MJCF to add them
+to), and a policy scene whose model does not namespace its elements, whose policy would
+otherwise read the extra bodies.
+
+### Passthrough AR
+
+A device that supports `immersive-ar` gets **Start AR** beside **Enter VR** in the WebXR
+section. The simulation is the same, physics and policy included, but the skybox
+and the ground planes stop being drawn, so the room shows through and the robot stands on
+your own floor rather than on MuJoCo's checkerboard. The session asks for the
+`local-floor` reference space, which is what puts the model's `z = 0` at floor level
+instead of at eye level; the sticks move you as they do in VR, so you can walk the scene
+to where you want it. Hand tracking works the same here, under the same switch.
+
+What is not there yet: nothing occludes the scene, so a robot behind your real sofa is
+drawn in front of it, and no shadow falls on your floor.
+
+## Google Colab
+
+`app.launch()` detects Colab and renders an inline iframe in the output cell instead of
+starting a blocking server, so the notebook version of a build script is the same script:
+
+```python
+import mujoco
+import mjswan
+
+builder = mjswan.Builder()
+project = builder.add_project(name="Demo")
+project.add_scene(spec=mujoco.MjSpec.from_file("model.xml"), name="Scene")
+
+app = builder.build()
+app.launch(height=600)  # inline iframe in Colab; local server elsewhere
+```
+
+If you need to control the server yourself — a different port, or serving a `dist/` you
+built earlier — the headers are the only subtle part:
+
+```python
+import http.server
+import socketserver
+import threading
+
+from google.colab import output
+
+PORT = 8000
+DIRECTORY = "dist"
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=DIRECTORY, **kwargs)
+
+    def end_headers(self):
+        # Required for SharedArrayBuffer (multi-threaded MuJoCo WASM)
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        super().end_headers()
+
+
+threading.Thread(
+    target=lambda: socketserver.TCPServer(("", PORT), Handler).serve_forever(),
+    daemon=True,
+).start()
+
+output.serve_kernel_port_as_iframe(PORT, height=600)
+```
+
+➔ Full notebooks:
+[examples/colab/demo.ipynb](https://github.com/ttktjmt/mjswan/blob/main/examples/colab/demo.ipynb){:target="_blank"}
+and
+[anymal_c_velocity.ipynb](https://github.com/ttktjmt/mjswan/blob/main/examples/colab/anymal_c_velocity.ipynb){:target="_blank"}.
+
+## npm engine
+
+When you want your own UI — your own play button, your own sliders, your own layout — skip
+the iframe and drive the engine directly. It renders into any element and never fetches
+anything itself, so you decide where the bytes come from:
+
+```ts
+import { createEngine } from 'mjswan';
+import { parseManifest } from 'mjswan/manifest';
+
+const base = 'https://example.com/myapp/';
+const bytes = (path: string) => async () =>
+  (await fetch(new URL(path, base))).arrayBuffer();
+
+const engine = await createEngine(document.getElementById('viewer')!);
+const catalog = parseManifest(
+  await (await fetch(new URL('manifest.json', base))).text(),
+  bytes,
+);
+
+const scene = catalog.projects[0].scenes[0];
+await engine.loadScene(await scene.buildScene());
+
+// Your UI, driven off the engine's snapshot.
+engine.subscribe((state) => renderControls(state.commands, state.commandValues));
+engine.commands.set('velocity:lin_vel_x', 0.8);
+```
+
+The library build is a single self-contained ESM, so it also works straight from a CDN
+without a bundler:
+
+```js
+const { createEngine } = await import(
+  'https://cdn.jsdelivr.net/npm/mjswan/dist/mjswan.js'
+);
+```
+
+Or serve the package's `dist/` directory from your own origin: the bundle resolves its
+WebAssembly relative to itself, so that one directory needs no other host, no configuration,
+and a single `script-src` prefix under a strict CSP.
+
+Without the bundled app there is no About dialog, so showing each scene's credits is up to
+your page: the catalog's `scene.credits` and `project.work` list them, and fetch a
+`LICENSE` or `NOTICE` only when asked.
+
+See the [Engine API](../api/engine.md) for the full surface.

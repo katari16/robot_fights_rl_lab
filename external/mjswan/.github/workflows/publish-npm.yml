@@ -1,0 +1,62 @@
+name: publish-npm
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout (tag or SHA)"
+        required: true
+        type: string
+      version:
+        description: "Version to publish (X.Y.Z or X.Y.Z-beta.N)"
+        required: true
+        type: string
+      tag:
+        description: "npm dist-tag (latest for stable, beta for prereleases)"
+        required: false
+        type: string
+        default: latest
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ inputs.ref }}
+
+      # Set from the input so a prerelease publishes its version even though the
+      # tagged commit may not carry the bump (see release.yml).
+      - name: Set version
+        run: |
+          sed -i "s/^__version__ = \".*\"/__version__ = \"${{ inputs.version }}\"/" src/mjswan/_version.py
+          cd src/mjswan/template
+          jq --arg v "${{ inputs.version }}" '.version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+
+      - name: Run pytest
+        run: uv run --locked --extra dev --python 3.12 pytest
+
+      - name: Setup Node.js for template build
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '24' # Bundles npm >= 11.5.1, required by trusted publishing
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Build web template
+        working-directory: src/mjswan/template
+        run: |
+          npm install
+          npm run build
+
+      - name: Publish to npm
+        working-directory: src/mjswan/template
+        run: npm publish --access public --tag "${{ inputs.tag }}" # Auth via OIDC trusted publishing

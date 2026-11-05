@@ -1,0 +1,54 @@
+*/babel/*.json
+.idea
+.vscode
+*__pycache__*
+*.egg-info
+# Build artefacts and downloaded wheels. `python -m build` writes here, and a
+# stray `pip download` in the working tree is otherwise one `git add -A` away
+# from committing an 11 MB binary that no history rewrite gets back out.
+*.whl
+dist/
+outputs/*
+output/*
+rendered_images/*
+*tmp*
+results/*
+exps/*
+.DS_Store
+**/.DS_Store
+wandb/*
+newton_source/*
+data/amass/*.pkl
+.claude/*
+!.claude/commands/
+.cursor/
+renders/
+.envrc
+CLAUDE.local.md
+# safety-probe traces (multi-GB npz)
+.cache/
+
+# Newton/IsaacLab viewer window state; churns on every run
+imgui.ini
+
+# env_parity.sh keeps the last run's traces here by default (PARITY_KEEP_DIR); never commit them.
+parity_traces/
+
+# Project-scoped MCP config. It names internal MaaS/MCP endpoints and lives at
+# the repo root -- not under internal/, not in make_release_tree.py's EXCLUDED --
+# so a stray `git add` would commit it straight into the published tree. See
+# internal/CLAUDE.md. test_internal_fence.py pins this ignore so it cannot drift.
+.mcp.json
+
+# Cluster site files hold real cluster names, login nodes, paths, images and
+# account/workspace ids. Only the *.example.yaml templates (placeholders) ship;
+# your filled copy stays local. Point --site-config / the $PROTOMOTIONS_*_SITE
+# env var at it, or keep it at these default names beside the repo root.
+lepton_site.yaml
+slurm_site.yaml
+
+# Metatron native model package is fetched from a pinned Hugging Face revision.
+data/pretrained_models/metatron/G1/
+
+# Tutorial 7 writes its checkpoints here when run from the repo root.
+tutorial_7_output/

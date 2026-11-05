@@ -1,0 +1,60 @@
+name: test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up uv and Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          activate-environment: true
+
+      # From uv.lock only, so a release published since the last lock cannot reach CI.
+      # That includes torch: the locked Linux wheel is the CUDA build, heavier than the
+      # CPU wheel mjswan's `torch.onnx.export` needs, but the one the lock pins.
+      - name: Install dependencies
+        run: uv sync --locked --extra dev
+
+      # Runs L1/L2 tests only.
+      # @slow tests (builder.build) trigger a full npm/Node.js frontend build
+      # and are not suitable for regular CI.
+      # Integration tests (L4) are skipped automatically when demo assets are absent.
+      - name: Test with pytest
+        run: |
+          pytest -m "not slow" --tb=short -q
+
+  core:
+    # A bare `pip install mjswan`. The tests skip wherever an extra is installed;
+    # MJSWAN_CORE_ONLY turns that skip into a failure here.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          python-version: "3.12"
+          activate-environment: true
+
+      - name: Install mjswan without extras
+        run: uv sync --locked --no-editable --group test
+
+      - name: Test the core install
+        env:
+          MJSWAN_CORE_ONLY: "1"
+        run: |
+          pytest tests/test_core_install.py --tb=short -q

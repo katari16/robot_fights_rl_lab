@@ -1,0 +1,351 @@
+/**
+ * Public API surface for the headless engine. One simulation at a time, bytes in directly
+ * rather than fetched, and verbs named for their cost: `loadScene` rebuilds, as does `xr.enter`
+ * when the hand-tracking switch disagrees with the model; the rest are live.
+ */
+import type { CameraView, ViewerConfig } from '../core/engine/viewer_config';
+import type { TerrainData } from '../core/event/EventBase';
+import type { Bytes } from '../core/utils/bytes';
+import type { ArchiveLimits } from '../core/utils/mjzLoader';
+
+export type { ArchiveLimits };
+import type { SplatTransform } from '../core/scene/splat';
+import type { ModelFormat } from '../core/scene/scene';
+import type { EnginePlugins } from '../core/plugins';
+import type { SkinConfig } from '../core/skin/config';
+import type { PrimitiveType } from '../core/scene/primitive';
+import type { HandleKind, PreviewGeom, PreviewInput } from '../core/scene/preview';
+import type { GeomType, PickHit } from '../core/interaction/pick';
+
+// Bytes: asset bytes or a lazy loader. EnginePlugins: custom MDP terms, trusted-only.
+export type { Bytes, SplatTransform, ModelFormat, EnginePlugins, SkinConfig };
+// What a host previews, where it would go, and what it edits (ADR 0011).
+export type { PrimitiveType, GeomType, PreviewInput, PreviewGeom, HandleKind, PickHit };
+
+export interface SplatInput {
+  data: Bytes;            // .spz
+  collider?: Bytes;       // optional collider mesh
+  transform?: SplatTransform;
+}
+
+/** A skin: a rigged character posed from the robot's bodies, drawn only, never simulated. */
+export interface SkinInput {
+  data: Bytes;            // .vrm or .glb
+  config: SkinConfig;
+}
+
+export interface MotionInput {
+  name: string;
+  data: Bytes;            // .npz (lazy loader preserves today's on-demand load)
+  default?: boolean;
+}
+
+export interface PolicyInput {
+  /**
+   * The policy's manifest entry merged with its MDP (observations, actions,
+   * terminations, commands and events); opaque to the app, interpreted by the engine.
+   */
+  config: object;
+  onnx: Bytes;
+  /**
+   * Traced term-body graphs of the whole MDP, events included, keyed by the path the
+   * config refers to them by (`"mdp/locomotion/obs/actor.onnx"`). The engine never
+   * fetches, so the app delivers the bytes; `policyGraphRefs(config)` enumerates what to
+   * load. A missing entry warns and skips that term.
+   */
+  graphs?: Record<string, Bytes>;
+  motions?: MotionInput[];
+  /** Policy-scoped custom terms (observations / terminations / commands / events). */
+  plugins?: EnginePlugins;
+}
+
+export interface SceneInput {
+  model: Bytes;
+  /**
+   * `mjz` (the default) for the zipped MJCF of `add_scene(spec=...)`, `mjb` for the
+   * compiled model of `add_scene(model=...)`. An `mjb` loads only in the MuJoCo version
+   * that saved it, and has no XML to add the XR hands to.
+   */
+  modelFormat?: ModelFormat;
+  policy?: PolicyInput | null;
+  splat?: SplatInput | null;
+  /** A file that fails to load warns and leaves the scene without it. */
+  skin?: SkinInput | null;
+  viewer?: ViewerConfig;
+  /**
+   * Spawn positions (flat patches) any policy's event terms may draw from. The events
+   * themselves travel with the policy (ADR 0006 §3).
+   */
+  terrainData?: TerrainData;
+  /** mjlab's `timestep * decimation`; the model carries only the physics timestep. */
+  controlDt?: number;
+  /** Scene-scoped custom terms (events). */
+  plugins?: EnginePlugins;
+}
+
+/** Camera pose in spherical MuJoCo coordinates (x forward, y left, z up). */
+export type { CameraView };
+
+export interface CameraControls {
+  /** Overwrite the current pose; body tracking (if any) continues, user drag stays live. */
+  set(view: Partial<CameraView>): void;
+  get(): CameraView;
+  /** Re-fit the camera to the scene bounds. */
+  frame(): void;
+  /** mjviser's "Track camera": follow the viewer config's tracked body. On by default. */
+  setTracking(enabled: boolean): void;
+}
+
+/** A policy command term surfaced for generic UI controls. */
+export interface CommandDescriptor {
+  id: string;             // "group:name"
+  group: string;
+  type: 'slider' | 'checkbox' | 'button';
+  label: string;
+  min?: number;           // slider only
+  max?: number;           // slider only
+  step?: number;          // slider only
+  /** Slider only: name of a sibling checkbox that gates this control. */
+  enabledWhen?: string;
+  /** Slider only: a presentational companion that rescales this slider's drag range. */
+  adjustableRange?: SliderRangeControl;
+  /** Button only: tabler icon name the build recorded from the term's own GUI. */
+  icon?: string;
+}
+
+/** Bounds of an {@link CommandDescriptor.adjustableRange} companion slider. */
+export interface SliderRangeControl {
+  min: number;
+  max: number;
+  step: number;
+  default: number;
+  label?: string;
+}
+
+export interface CommandControls {
+  set(id: string, value: number): void;
+  trigger(id: string): void;
+}
+
+/**
+ * One of mjlab's Debug Viz switches: a command term's, raycast sensor's or reward term's
+ * drawing; or the viewer's `xray`, which "Enabled" hides alike.
+ */
+export interface DebugVisDescriptor {
+  /** `command:<term>`, `sensor:<name>`, `reward:<term>` or `xray`; the id {@link DebugVisControls.set} takes. */
+  id: string;
+  /** As mjlab's checkbox reads: a command term capitalized, a sensor or reward term as named. */
+  label: string;
+  enabled: boolean;
+}
+
+export interface DebugVisControls {
+  /** mjlab's Debug Viz "Enabled": every drawing at once, leaving each one's own switch as it is. */
+  setEnabled(enabled: boolean): void;
+  set(id: string, enabled: boolean): void;
+}
+
+/** One event term the operator can drive: a `manual` button or an `interval` schedule. */
+export interface EventDescriptor {
+  /** The term's config name, and the id {@link EventControls} takes. */
+  name: string;
+  /** The term's own `label`, or its name when it declared none. */
+  label: string;
+  kind: 'manual' | 'interval';
+  /** `interval`: its schedule is running. `manual`: its button can fire — false while
+   * the term's `disabled_when` schedule owns the job. */
+  armed: boolean;
+}
+
+export interface EventControls {
+  /** Fire a `mode="manual"` term now. */
+  fire(name: string): void;
+  /** Start or stop a `mode="interval"` term's schedule. */
+  setArmed(name: string, armed: boolean): void;
+}
+
+/** Which pointer gesture the viewer is in. The set is closed: there is no plugin path in. */
+export type InteractionModeId = 'view' | 'pull' | 'push' | 'weld';
+
+/** One number a mode exposes, with everything a generic control needs to draw it. */
+export interface InteractionParamDescriptor {
+  /** The id {@link InteractionControls.setParam} takes. */
+  name: string;
+  label: string;
+  /** Printed beside the label; '' for a dimensionless one. */
+  unit: string;
+  /** A `checkbox` holds 0 or 1. */
+  type: 'slider' | 'checkbox';
+  /** What `setParam` clamps to, and so what a typed value may reach. */
+  min: number;
+  max: number;
+  /** The span a slider drags over, inside `min`..`max`; absent means the same. */
+  softMin?: number;
+  softMax?: number;
+  step: number;
+  default: number;
+}
+
+export interface InteractionModeDescriptor {
+  id: InteractionModeId;
+  label: string;
+  /** False when the loaded scene cannot run this mode; `reason` says why. */
+  available: boolean;
+  reason?: string;
+  params: ReadonlyArray<InteractionParamDescriptor>;
+}
+
+/**
+ * The live pointer mode and its parameters. Bindings are fixed, not configurable: a press
+ * on a body goes to the mode, any other press to the camera.
+ */
+export interface InteractionControls {
+  setMode(id: InteractionModeId): void;
+  getMode(): InteractionModeId;
+  /** Out-of-range values are clamped to the descriptor, not refused. */
+  setParam(mode: InteractionModeId, name: string, value: number): void;
+  getParams(mode: InteractionModeId): Readonly<Record<string, number>>;
+  /** Drop whatever is held, for a host that is about to take the pointer away. */
+  cancel(): void;
+}
+
+/** A WebXR session: `vr` is `immersive-vr`, `ar` is `immersive-ar` (passthrough). */
+export type XrSessionId = 'vr' | 'ar';
+
+/** One session this device can start. The engine draws no button; the host does. */
+export interface XrSessionDescriptor {
+  id: XrSessionId;
+  /** What a press does now: `Enter VR` / `Start AR`, or `Exit VR` / `Stop AR` while it runs. */
+  label: string;
+  active: boolean;
+}
+
+/**
+ * The tracked hands as bodies inside the simulation. The switch never rebuilds the model
+ * by itself: it applies at the next scene load, or on entering a session when the model
+ * was built the other way.
+ */
+export interface HandTrackingDescriptor {
+  /** False when the loaded scene cannot take the hand bodies; `reason` says why. */
+  available: boolean;
+  reason?: string;
+  enabled: boolean;
+}
+
+/**
+ * One primitive geom drawn over the scene and never simulated: what a host shows where a
+ * geom would go before it adds one, and while it edits one (ADR 0011). It is
+ * built as the model's geoms are, casts a shadow, and survives a scene load; neither the
+ * pointer modes nor `pick` hit it.
+ */
+export interface PreviewControls {
+  /** Draw it, or move and reshape the one on show. Live: the model is never touched. */
+  show(input: PreviewInput): void;
+  hide(): void;
+  /** Whether the preview or one of its handles is under a point of the canvas, in client CSS pixels. */
+  hit(clientX: number, clientY: number): boolean;
+  /**
+   * Called as the pointer drags a handle (a resize, a turn or a move), with the preview as
+   * it now is, and once more with `done` when it lets go. Returns the unsubscribe.
+   */
+  onChange(listener: (preview: PreviewGeom, done: boolean) => void): () => void;
+}
+
+export interface XrControls {
+  /**
+   * Start a session. Call it from the click that asks for one: the browser grants a session
+   * only inside a user gesture. Resolves once the headset shows the scene: after any scene or
+   * policy load already running, and after rebuilding the model when it does not match the
+   * hand-tracking switch.
+   */
+  enter(id: XrSessionId): Promise<void>;
+  exit(): Promise<void>;
+  setHandTracking(enabled: boolean): void;
+}
+
+/** Immutable snapshot pushed to {@link MjswanEngine.subscribe} listeners. */
+export interface MjswanEngineState {
+  phase: 'running' | 'paused';
+  loading: boolean;
+  loadingMessage: string | null;
+  error: Error | null;
+  commands: ReadonlyArray<CommandDescriptor>;
+  commandValues: Readonly<Record<string, number>>;
+  /** Drawings to toggle, in mjlab's order; empty when the policy has none. */
+  debugVis: ReadonlyArray<DebugVisDescriptor>;
+  /** {@link DebugVisControls.setEnabled}'s switch: a drawing shows only while it and its own are on. */
+  debugVisEnabled: boolean;
+  /** {@link CameraControls.setTracking}'s switch, and the camera's vertical FOV in degrees. */
+  camera: { tracking: boolean; fovy: number };
+  /** Event terms the operator can drive; empty when the scene has none. */
+  events: ReadonlyArray<EventDescriptor>;
+  /** Every pointer mode, with whether this scene can run it. */
+  interactions: ReadonlyArray<InteractionModeDescriptor>;
+  interactionMode: InteractionModeId;
+  /** Current parameter values, per mode. */
+  interactionParams: Readonly<Record<InteractionModeId, Readonly<Record<string, number>>>>;
+  /** The WebXR sessions this device can start. */
+  xrSessions: ReadonlyArray<XrSessionDescriptor>;
+  /** Null on a device without `immersive-vr`, where no session could track hands. */
+  handTracking: HandTrackingDescriptor | null;
+  /** Reported so an app recording a session can persist it rather than guess. */
+  termSeed: number;
+}
+
+export interface CreateEngineOptions {
+  /** Load `mujoco/mt` (SharedArrayBuffer; requires COOP/COEP). Default false. */
+  multithreaded?: boolean;
+  /**
+   * Seed for the one PRNG every traced term's `rand` comes from. Pass the value read back
+   * from {@link MjswanEngineState.termSeed} to re-run a recorded session.
+   */
+  termSeed?: number;
+  /** The hand-tracking switch's starting state ({@link XrControls.setHandTracking}). Default false. */
+  handTracking?: boolean;
+  /**
+   * What a `.mjz` may hold, checked as it unpacks rather than read from its directory: a
+   * host that renders archives it did not build passes its own upload rules. Default none.
+   */
+  archive?: ArchiveLimits;
+}
+
+/** A headless, instance-scoped simulation engine. Create with {@link createEngine}. */
+export interface MjswanEngine {
+  // content — verbs match switch cost
+  loadScene(input: SceneInput): Promise<void>;          // full model rebuild
+  setPolicy(input: PolicyInput | null): Promise<void>;  // live, keeps model
+  setSplat(input: SplatInput | null): Promise<void>;    // live
+  setSkin(input: SkinInput | null): Promise<void>;      // live; replaces the skin on show
+  setMotion(name: string | null): Promise<boolean>;     // live; returns whether accepted
+  /** Live-update the current splat's placement (dev calibration; no reload). */
+  calibrateSplat(transform: SplatTransform): void;
+
+  // playback
+  play(): void;
+  pause(): void;
+  reset(): void;
+
+  // subsystems
+  readonly camera: CameraControls;
+  readonly commands: CommandControls;
+  readonly debugVis: DebugVisControls;
+  readonly events: EventControls;
+  readonly interaction: InteractionControls;
+  readonly xr: XrControls;
+  readonly preview: PreviewControls;
+
+  /**
+   * The surface under a point of the canvas, in client CSS pixels as a `PointerEvent`
+   * gives them, by MuJoCo's own ray (ADR 0011): what the simulation would hit, the floor
+   * included, and nothing only drawn. Null over empty space, or before a scene loads.
+   */
+  pick(clientX: number, clientY: number): PickHit | null;
+
+  // state
+  getState(): MjswanEngineState;
+  subscribe(listener: (state: MjswanEngineState) => void): () => void;
+
+  // misc
+  captureThumbnail(options?: { maxDim?: number; quality?: number }): Promise<Blob>;
+  dispose(): void;
+}
