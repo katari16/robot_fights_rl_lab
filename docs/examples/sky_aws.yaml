@@ -1,5 +1,5 @@
 # Stock mjlab infrastructure test. This does not train SONIC or combat skills.
-# Run from the repository root: sky launch -c robot-fights-dev examples/sky_aws.yaml
+# Run from the repository root: sky launch -c robot-fights-dev docs/examples/sky_aws.yaml
 # The instance stays up for output retrieval. Finish with: sky down robot-fights-dev
 name: robot-fights-mjlab
 

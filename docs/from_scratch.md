@@ -1,6 +1,6 @@
 # Training a motion tracker from scratch
 
-[Main guide](../README.md) · [LoRA and cloud setup](training.md)
+[Main guide](README.md) · [LoRA and cloud setup](training.md)
 
 Training from scratch means learning the controller's weights for our chosen robot and tasks. We still use a robot model, reference motions and a training environment. The advantage is control over what the policy observes and what it learns to do. The cost is having to establish the entire baseline ourselves.
 
@@ -8,7 +8,7 @@ For this league, we would begin with a small collection of useful movements and 
 
 ## Where SuperMimic fits
 
-[SuperMimic](https://supermimic.github.io/) alternates simulator data collection, fitting a differentiable dynamics model, and policy improvement through predicted trajectories. A critic estimates the return beyond those short trajectories. The world model stays fixed during an individual policy update, but continues learning across iterations. The [Figure 2 diagram in the main guide](../README.md#choose-between-adapting-and-training-from-scratch) illustrates the loop. [Paper, Sections 3.1 to 3.3](https://arxiv.org/pdf/2610.28480v1#page=4)
+[SuperMimic](https://supermimic.github.io/) alternates simulator data collection, fitting a differentiable dynamics model, and policy improvement through predicted trajectories. A critic estimates the return beyond those short trajectories. The world model stays fixed during an individual policy update, but continues learning across iterations. The [Figure 2 diagram in the main guide](README.md#choose-between-adapting-and-training-from-scratch) illustrates the loop. [Paper, Sections 3.1 to 3.3](https://arxiv.org/pdf/2610.28480v1#page=4)
 
 This is an alternative learning method to investigate alongside ordinary simulator-based PPO. It does not require starting from SONIC weights. It also does not turn a motion dataset into examples of physical interaction by itself: the paper filters out motions requiring unavailable objects or terrain. Adding opponents would be a new experiment. [Paper, Appendix E](https://arxiv.org/pdf/2610.28480v1#page=15)
 
@@ -68,4 +68,4 @@ Only then introduce a second articulated robot. This changes both the contact ge
 
 A useful release contains the trained policy, exact robot model, observation and action specifications, motion sources, resolved training configuration and evaluation cases. Include a checkpoint that can resume training and an exported policy that passes the [deployment checks](deployment.md).
 
-The current [SkyPilot example](../examples/sky_aws.yaml) remains an infrastructure smoke test for stock mjlab. It does not run this proposed learner. A SuperMimic experiment needs its own pinned implementation and dependencies before being placed on an AWS worker. The deliverable for this document is the development path; the controller and its measured training budget remain work to do.
+The current [SkyPilot example](examples/sky_aws.yaml) remains an infrastructure smoke test for stock mjlab. It does not run this proposed learner. A SuperMimic experiment needs its own pinned implementation and dependencies before being placed on an AWS worker. The deliverable for this document is the development path; the controller and its measured training budget remain work to do.

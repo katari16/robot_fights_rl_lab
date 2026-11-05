@@ -1,6 +1,6 @@
 # League systems
 
-[Main guide](../README.md)
+[Main guide](README.md)
 
 ## Pilot interface
 

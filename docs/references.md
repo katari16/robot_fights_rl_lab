@@ -1,6 +1,6 @@
 # References
 
-[Main guide](../README.md)
+[Main guide](README.md)
 
 The initial sources were checked on 21 October 2026; SuperMimic and additional demonstration sources were checked on 23 October 2026. Reported research results are attributed to their authors and were not reproduced for this guide. The league architecture and its acceptance milestones are proposals.
 
@@ -45,6 +45,6 @@ The initial sources were checked on 21 October 2026; SuperMimic and additional d
 
 ## Figures and reuse
 
-The main guide combines research figures, an animated jab example and links to actual fighting footage. The [demonstration notes](demonstrations.md) distinguish physical events, simulated fights and motion tracking. The [media source register](../assets/README.md) records attribution, embedding and the extraction of SuperMimic Figure 2.
+The main guide combines research figures, an animated jab example and links to actual fighting footage. The [demonstration notes](demonstrations.md) distinguish physical events, simulated fights and motion tracking. The [media source register](assets/README.md) records attribution, embedding and the extraction of SuperMimic Figure 2.
 
 External code, models, datasets and figures retain their respective terms. Code licensing does not automatically cover model weights, body models, source videos or game assets. External images can change or become unavailable; adjacent source links remain the reading path.

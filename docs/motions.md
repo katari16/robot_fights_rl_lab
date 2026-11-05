@@ -1,6 +1,6 @@
 # Motion preparation
 
-[Main guide](../README.md)
+[Main guide](README.md)
 
 ## Start with usable data
 

@@ -1,6 +1,6 @@
 # Media sources
 
-[Main guide](../README.md) · [Demonstrations](../docs/demonstrations.md)
+[Main guide](../README.md) · [Demonstrations](../demonstrations.md)
 
 Figures and demonstrations are attributed to their original creators. Their inclusion illustrates the technical discussion and does not imply affiliation or that the league has reproduced the results.
 

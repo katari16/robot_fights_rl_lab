@@ -1,6 +1,6 @@
 # Adaptation and training
 
-[Main guide](../README.md)
+[Main guide](README.md)
 
 This guide follows the adaptation path: begin with a working SONIC controller, then change its behavior through a contact curriculum and measured fine tuning. For a controller whose weights are learned from scratch, see [scratch training and SuperMimic](from_scratch.md). The two paths should eventually meet at the same evaluation suite.
 
@@ -73,7 +73,9 @@ This trains the stock tracking task. It does not fine tune SONIC or train a cont
 
 ## AWS through SkyPilot
 
-The supplied [AWS example](../examples/sky_aws.yaml) runs a short stock G1 velocity training job. It pins mjlab v1.6.0 at commit `0fb8a681136be94ffc636a3dd423cabb97d91f10`, uses TensorBoard, and needs no motion dataset or W&B credential. It is an infrastructure smoke test, not the proposed fighting trainer. The YAML and command names were checked against source; no cloud training was run for this document.
+The included `unitree_rl_mjlab` revision has no bundled SkyPilot task templates. Those are provided by [upstream mjlab](https://github.com/mujocolab/mjlab/tree/main/scripts/cloud). Its current training template targets Lambda Cloud by default; AWS and Unitree training require changes to the resource, setup and run sections. Unitree pins `mjlab==1.2.0`, while the example below uses upstream mjlab v1.6.0, so keep their environments separate. See [repository setup](repositories.md#cloud-training).
+
+The supplied [AWS example](examples/sky_aws.yaml) runs a short stock G1 velocity training job. It pins mjlab v1.6.0 at commit `0fb8a681136be94ffc636a3dd423cabb97d91f10`, uses TensorBoard, and needs no motion dataset or W&B credential. It is an infrastructure smoke test, not the proposed fighting trainer. The YAML and command names were checked against source; no cloud training was run for this document.
 
 Install `uv`, SkyPilot and AWS CLI v2 locally. Configure your own AWS account and an enabled GPU region with sufficient quota and SkyPilot permissions. SSO users can use a named profile:
 
@@ -83,7 +85,7 @@ aws configure sso --profile robot-fights
 export AWS_PROFILE=robot-fights
 aws sso login --profile robot-fights
 sky check aws
-sky launch -c robot-fights-dev examples/sky_aws.yaml
+sky launch -c robot-fights-dev docs/examples/sky_aws.yaml
 sky logs robot-fights-dev
 ```
 

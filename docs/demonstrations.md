@@ -1,6 +1,6 @@
 # Demonstrations
 
-[Main guide](../README.md)
+[Main guide](README.md)
 
 These examples make different parts of the development path visible. They belong to the linked projects and are not results produced by this repository.
 
@@ -28,4 +28,4 @@ The Robo Jab team's GIF connects a source video, human motion recovery, retarget
 
 [Try the SuperMimic browser demo](https://supermimic.github.io/demo/) to inspect its motion tracker, then see the hardware demonstrations on the [project page](https://supermimic.github.io/#robot). Use these to understand motion execution. Contact skills against another robot would require additional training and evaluation.
 
-The animated jab images are embedded from their authors' repository. The fight videos use clickable previews so they remain usable in a GitHub README. [Media sources and attribution](../assets/README.md)
+The animated jab images are embedded from their authors' repository. The fight videos use clickable previews so they remain usable in a GitHub README. [Media sources and attribution](assets/README.md)

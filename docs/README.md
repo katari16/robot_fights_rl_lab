@@ -2,6 +2,8 @@
 
 This repository describes how we would build a humanoid fighting league around Unitree G1 robots, and gives developers a starting point for the control, training and deployment work.
 
+The working platform is Unitree G1. All guides, figures and examples live under `docs/`; the SONIC, SuperMimic and Unitree mjlab source repositories are pinned under `external/`. Start with [repository setup](repositories.md).
+
 The experience we want is straightforward: a pilot uses a gamepad to move, guard and request a skill, while the robot handles its own balance and execution. A punch should remain useful when it meets an opponent, misses its target or is interrupted. After losing balance, the robot should have a defined path back to a controllable state. The same commands should let a developer practice in simulation and later operate a qualified physical robot.
 
 Getting there requires more than a library of convincing motions. We need a controller that can execute them, training that includes their physical consequences, and an interface that only requests actions the robot can currently perform. This guide follows that progression, starting with one working G1 and ending with two robots sharing an arena.
@@ -48,13 +50,13 @@ The authors report exceeding the released SONIC checkpoint's normalized return a
 
 For the league, the opportunity is to make controller experiments affordable enough to repeat. We could compare motion sets, observation choices and contact curricula instead of committing every available GPU hour to one large run. Those experiments still need measured costs and independent evaluation; the paper's runtime is not a quote for a fighting policy.
 
-We would keep the reproduced SONIC baseline while developing a smaller scratch-training experiment. First establish that our data and environment can train a few useful motions. Then investigate a learned dynamics model as a way to expand coverage. The [training from scratch guide](docs/from_scratch.md) separates the available starting points from the integration work required.
+We would keep the reproduced SONIC baseline while developing a smaller scratch-training experiment. First establish that our data and environment can train a few useful motions. Then investigate a learned dynamics model as a way to expand coverage. The [training from scratch guide](from_scratch.md) separates the available starting points from the integration work required.
 
 ## Build a motion library around usable skills
 
 A league needs a modest, reliable vocabulary before it needs a large repertoire. Begin with stance, guard, stepping, turning and recovery. Add one punch, then a kick, with a stable start and finish. Jumping comes later because takeoff, landing and interruption each introduce additional states that need testing.
 
-Use existing robot references or recorded teleoperation where possible. For a movement available only on video, a practical route is **GVHMR → GMR or UMR → validated robot references → simulation training**. GVHMR recovers human motion; retargeting maps it onto the robot. UMR is the method based on learned point cloud correspondence. The [motion preparation guide](docs/motions.md) covers the checks between those stages.
+Use existing robot references or recorded teleoperation where possible. For a movement available only on video, a practical route is **GVHMR → GMR or UMR → validated robot references → simulation training**. GVHMR recovers human motion; retargeting maps it onto the robot. UMR is the method based on learned point cloud correspondence. The [motion preparation guide](motions.md) covers the checks between those stages.
 
 [![Robo Jab animated demonstration of a G1 tracking a punch in simulation, with a reference overlay](https://raw.githubusercontent.com/abtonmoy/ai_hackathon_calhacks/bd8a0a65c60787296c7eb9a90be10b17fae3e12b/assets/sim_to_sim.gif)](https://github.com/abtonmoy/ai_hackathon_calhacks)
 
@@ -84,7 +86,7 @@ GigaBrain is a separate controller architecture, not a SONIC LoRA recipe. Its re
 
 Once the nominal controller works, LoRA is one candidate for adapting it to our robot configuration and contact curriculum. It freezes the base weights and trains small weight updates. This can make experiments easier to store and compare, while leaving the established command interface available.
 
-[TRACE on Unitree H2](https://github.com/QinnyuLan/SONIC_unitree_h2) and [SONIC transfer to AgiBot X2](https://sonic-agibot-x2.github.io/sonic-transfer/) provide concrete embodiment-transfer examples. They motivate decoder adaptation; they do not establish that a G1 becomes robust to fights simply by attaching an adapter. [Adaptation methods and release boundaries](docs/training.md)
+[TRACE on Unitree H2](https://github.com/QinnyuLan/SONIC_unitree_h2) and [SONIC transfer to AgiBot X2](https://sonic-agibot-x2.github.io/sonic-transfer/) provide concrete embodiment-transfer examples. They motivate decoder adaptation; they do not establish that a G1 becomes robust to fights simply by attaching an adapter. [Adaptation methods and release boundaries](training.md)
 
 Our first experiment would retain nominal motions in the training mixture while adding target contact and disturbances. Compare the adapter against the original checkpoint and a full fine tuning control using the same evaluation cases. An improvement in punch completion is useful only if standing, walking and recovery remain acceptable.
 
@@ -125,7 +127,7 @@ We recommend mjlab with MuJoCo Warp for the league's training environment. It pr
 
 There is integration work between the research components. SONIC's released training pipeline uses Isaac Lab. mjlab's existing G1 tracking task is a useful independent baseline, but its policy is not a SONIC checkpoint. Likewise, using MuJoCo Warp does not install SuperMimic's replay buffer, dynamics model or learner. Reproduce each starting point before combining changes to the simulator, observations and training method.
 
-Use AWS through SkyPilot to make the experiments repeatable. Begin with the supplied [small infrastructure job](examples/sky_aws.yaml), which checks stock mjlab training and checkpoint retrieval. Then increase environment count and training duration based on measured throughput and memory use. Save resolved configurations, model versions and evaluation results alongside checkpoints. [Training and cloud setup](docs/training.md)
+Use AWS through SkyPilot to make the experiments repeatable. Begin with the supplied [small infrastructure job](examples/sky_aws.yaml), which checks stock mjlab training and checkpoint retrieval. Then increase environment count and training duration based on measured throughput and memory use. Save resolved configurations, model versions and evaluation results alongside checkpoints. [Training and cloud setup](training.md)
 
 For scratch training, compare methods at a fixed evaluation target. For contact adaptation, compare success across held out target configurations and disturbances. For both, include failed runs, evaluation time and restart costs in the compute record. A fast training loop is valuable when it produces a controller that passes the deployment tests.
 
@@ -133,7 +135,7 @@ For scratch training, compare methods at a fixed evaluation target. For contact 
 
 Keep the deployed policy's observation contract explicit. Joint order, signs, frames, history, normalization and timing all need to agree with training. If an observation exists only in simulation, either provide a real estimator or train without it. A successful simulator rollout cannot compensate for a different input on the robot.
 
-If distillation is necessary, evaluate the teacher, student and exported runtime on the same trials. Track falls, recovery and contact completion as well as average tracking error. Then replay recorded observation tensors through the different runtimes to separate numerical export problems from closed-loop control problems. [Deployment and evaluation](docs/deployment.md)
+If distillation is necessary, evaluate the teacher, student and exported runtime on the same trials. Track falls, recovery and contact completion as well as average tracking error. Then replay recorded observation tensors through the different runtimes to separate numerical export problems from closed-loop control problems. [Deployment and evaluation](deployment.md)
 
 Commission motions gradually with validated reference timing and bounded commands. **Action scale changes command amplitude, not playback speed.** Setting it to 0.3 also reduces corrective actions. Retiming a reference to speed 0.3 takes about 3.33 times as long, while policy and motor rates stay fixed. Recompute reference derivatives and test the slower motion: a jump or dynamic kick may depend on its original timing.
 
@@ -147,21 +149,21 @@ After both robots work independently, put them into one simulated physical world
 
 *REK simulator, published by Reflex Arc. Select the image to watch gameplay. This is simulated robot fighting; the event recording above shows physical robots. [Engineering context](https://reflexarc.co.uk/projects/rek-robots).*
 
-The [PufferLib REK fork](https://github.com/xinpw8/PufferLib/tree/rek-native-play/ocean/rek_g1) becomes relevant when considering tactical learning over an existing controller. Its high level action selection, physical backend and simplified alternatives are different layers of the problem. Their throughput figures do not establish the cost of training a new low level tracker. The [reference notes](docs/references.md#rek-and-pufferlib) preserve those distinctions.
+The [PufferLib REK fork](https://github.com/xinpw8/PufferLib/tree/rek-native-play/ocean/rek_g1) becomes relevant when considering tactical learning over an existing controller. Its high level action selection, physical backend and simplified alternatives are different layers of the problem. Their throughput figures do not establish the cost of training a new low level tracker. The [reference notes](references.md#rek-and-pufferlib) preserve those distinctions.
 
 A league also needs a shared robot specification, command protocol, referee, synchronized replay logs and event procedures. Keep scoring separate from the controller's shaping rewards. A robot can execute a requested punch correctly without landing a legal hit. Both the pilot and referee need to know which event actually occurred.
 
-The first developer release should therefore contain a reproducible baseline and a small validated skill set, with the same command meanings in simulation and on hardware. Expand the repertoire as evidence accumulates. The [league systems guide](docs/league.md) describes the surrounding infrastructure.
+The first developer release should therefore contain a reproducible baseline and a small validated skill set, with the same command meanings in simulation and on hardware. Expand the repertoire as evidence accumulates. The [league systems guide](league.md) describes the surrounding infrastructure.
 
 ## Developer starting points
 
 | Work | Start here | First useful result |
 | --- | --- | --- |
 | Reproduce a controller | [SONIC implementation](https://github.com/NVlabs/GR00T-WholeBodyControl) | One configured G1 with repeatable baseline trials |
-| Train a tracker from scratch | [Scratch training and SuperMimic](docs/from_scratch.md) | A small motion set with measured tracking and failure rates |
-| Prepare a new skill | [Motion preparation](docs/motions.md) | A validated reference including entry and recovery |
-| Adapt for contact | [LoRA and training](docs/training.md) | Better contact performance without baseline regression |
-| Validate the robot runtime | [Deployment](docs/deployment.md) | Matching observations, actions and qualified transitions |
-| Connect robots and pilots | [League systems](docs/league.md) | Repeatable simulated rounds with logs and disconnect handling |
+| Train a tracker from scratch | [Scratch training and SuperMimic](from_scratch.md) | A small motion set with measured tracking and failure rates |
+| Prepare a new skill | [Motion preparation](motions.md) | A validated reference including entry and recovery |
+| Adapt for contact | [LoRA and training](training.md) | Better contact performance without baseline regression |
+| Validate the robot runtime | [Deployment](deployment.md) | Matching observations, actions and qualified transitions |
+| Connect robots and pilots | [League systems](league.md) | Repeatable simulated rounds with logs and disconnect handling |
 
-[Papers and repositories](docs/references.md) · [Demonstrations and media context](docs/demonstrations.md) · [Figure attribution](assets/README.md)
+[Papers and repositories](references.md) · [Demonstrations and media context](demonstrations.md) · [Figure attribution](assets/README.md)

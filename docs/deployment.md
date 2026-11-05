@@ -1,6 +1,6 @@
 # Deployment and evaluation
 
-[Main guide](../README.md)
+[Main guide](README.md)
 
 ## Preserve the policy contract
 
