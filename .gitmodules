@@ -6,3 +6,11 @@
 	path = external/unitree_rl_mjlab
 	url = https://github.com/unitreerobotics/unitree_rl_mjlab.git
 	shallow = true
+[submodule "external/unitree_rl_lab"]
+	path = external/unitree_rl_lab
+	url = https://github.com/unitreerobotics/unitree_rl_lab.git
+	shallow = true
+[submodule "external/unitree_sdk2"]
+	path = external/unitree_sdk2
+	url = https://github.com/unitreerobotics/unitree_sdk2.git
+	shallow = true

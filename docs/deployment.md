@@ -2,6 +2,10 @@
 
 [Main guide](README.md)
 
+## Robot interface
+
+The included [Unitree SDK2](../external/unitree_sdk2) supplies the C++ robot communication library used by Unitree's deployment controllers. The [Unitree RL Lab deployment guide](https://github.com/unitreerobotics/unitree_rl_lab/blob/4960b84732b0c2ec593dccbfe963fda1bcd7b1e3/README.md#deploy) covers SDK setup, controller compilation and validation in MuJoCo before hardware execution. Follow the deployment path belonging to the selected policy; the SDK alone does not supply its observation processing or inference loop.
+
 ## Preserve the policy contract
 
 Pin the checkpoint, adapter, robot model, observation specification and executable together. Use the same preprocessing in simulation and on hardware. SONIC publishes separate model variants with matching configuration files; mixing an encoder from one variant with another decoder is not a supported substitution. [Model card](https://huggingface.co/nvidia/GEAR-SONIC)
