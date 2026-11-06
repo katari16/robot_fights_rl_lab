@@ -123,3 +123,22 @@ Apache-2.0. For commercial use, please keep the attribution described in the
 [repository README](https://github.com/ttktjmt/mjswan#license).
 
 The packages bundled into `dist/` keep their own licenses, collected in `dist/THIRD_PARTY_LICENSES.md`.
+
+### Kinematic pose previews in this repository
+
+The local engine adds `engine.setPose(qpos)` for complete MuJoCo position arrays on
+paused scenes without a policy. It validates dimensions and finite values,
+normalizes free and ball joint quaternions, clears velocities and applied forces,
+and runs forward kinematics. Physics does not advance. A running scene or a
+loaded policy rejects the call. The RSL arena host uses this API to replay two G1
+references while retaining mjswan's camera, model loading and rendering.
+
+```javascript
+await engine.loadScene({ model: sceneBytes });
+engine.pause();
+engine.setPose(referenceQpos);
+```
+
+This local addition is covered by `src/core/engine/pose.test.ts` and the repository's
+`simulation/check_browser.py` acceptance check. It is not part of the recorded
+upstream import revision.

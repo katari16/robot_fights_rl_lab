@@ -324,6 +324,8 @@ export interface MjswanEngine {
   play(): void;
   pause(): void;
   reset(): void;
+  /** Set a complete pose on a paused, policy-free scene for kinematic previews. */
+  setPose(qpos: ArrayLike<number>): void;
 
   // subsystems
   readonly camera: CameraControls;
