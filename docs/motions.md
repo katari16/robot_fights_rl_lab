@@ -10,18 +10,40 @@ Existing robot references and recorded teleoperation are usually easier to valid
 
 [GVHMR](https://github.com/zju3dv/GVHMR) estimates world grounded human motion from monocular video. Its output is a body motion estimate, not robot joint targets. [GMR](https://github.com/YanjieZe/GMR) includes a GVHMR conversion path and maps human motion onto supported humanoid models.
 
-[UMR](https://github.com/hanyang9/UMR) is the point cloud based alternative. It learns surface correspondences and uses them in constrained retargeting. It is useful when morphology and interaction contacts matter beyond sparse joint matching. Its correspondence stage is reused for the same source template and robot.
+[FlowHMR](https://github.com/flowhmr/flowhmr) is a newer candidate worth evaluating for this pipeline. It uses physics tracking rewards during training; its [project demonstrations](https://flowhmr.github.io/) also show GMR retargeting followed by SONIC tracking on a simulated G1. This is useful evidence for integration, but each proposed fighting skill still needs its own feasibility and contact tests. [OnlineHMR](https://tsukasane.github.io/Video-OnlineHMR/) is another option when causal, streaming reconstruction is needed. These methods are linked for evaluation and are not imported here.
+
+[UMR](../external/UMR) is the point cloud based alternative. It learns surface correspondences and uses them in constrained retargeting. It is useful when morphology and interaction contacts matter beyond sparse joint matching. Its correspondence stage is reused for the same source template and robot. See the [included source and setup](repositories.md#retargeting-and-motion-learning).
 
 ```mermaid
 flowchart LR
     V["Video or motion capture"] --> H["Human motion estimate"]
     H --> R["GMR or UMR retargeting"]
     R --> Q["Geometry and timing checks"]
-    Q --> T["Tracking in contact simulation"]
+    Q --> F["G1 actuator and dynamics checks"]
+    F --> T["Tracking in contact simulation"]
     T --> E["Held out skill evaluation"]
 ```
 
 These stages have different jobs. Retargeting finds compatible poses; simulation training learns how to execute them under dynamics. Neither reconstruction nor retargeting establishes real contact forces.
+
+## Game footage as a skill source
+
+Mortal Kombat and other fighting games can suggest guards, steps, punches, kicks and transitions. Use gameplay clips to propose candidate skills and inspect their timing. The [example in the main guide](README.md#build-a-motion-library-around-usable-skills) illustrates this source of ideas. A GIF is useful for discussion; reconstruction needs footage with known timing, sufficient resolution and a visible performer. Stylized characters, camera cuts and occlusion can make human motion estimators fail.
+
+Filter candidates against the actual G1 configuration before spending a full training run on them:
+
+| Check | Acceptance evidence |
+| --- | --- |
+| Reach and geometry | Joint ranges, self collision, ground clearance and target reach remain valid through entry, execution and recovery. |
+| Motor capability | Required joint torque and velocity fit the configured motor torque versus speed envelope, with margin. Check permitted peak duration, continuous load and thermal limits across repeated executions. |
+| Dynamic execution | A controller tracks the reference with realistic actuator limits, gravity, friction and contacts, and returns to a controllable state. Log requested and applied torque, saturation duration, tracking error and falls. |
+| Contact robustness | The skill remains acceptable when the target shifts, blocks the strike or is missed, across the chosen variations in mass, friction and delay. |
+
+Inverse dynamics can provide an initial torque estimate when contact assumptions are defined. Closed loop simulation is still needed: kinematically playing an animation or clipping excessive torque does not establish that the robot can execute it. Reject infeasible clips, or change their reach, height and timing and repeat the checks. Slower playback may reduce inertial demand, but does not remove gravity loads and can invalidate jumps or balance transitions. Use the limits of the particular G1 variant and configured operating envelope, rather than a single advertised peak torque.
+
+Record the rejection reason or the tested operating range with each candidate. Only references that pass these checks enter the proposed skill library; simulated success still precedes gradual hardware qualification.
+
+The included [G1 actuator configuration](../external/unitree_rl_mjlab/src/assets/robots/unitree_g1/g1_constants.py) is a starting point for inspecting effort and velocity values. Confirm what the simulator actually enforces; these constants alone do not implement a full motor thermal model or establish hardware limits for every G1 variant.
 
 ## Prepare a skill
 

@@ -2,7 +2,7 @@
 
 This repository describes how we would build a humanoid fighting league around Unitree G1 robots, and gives developers a starting point for the control, training and deployment work.
 
-The working platform is Unitree G1. League guides, figures and examples live under `docs/`. Under `external/`, SuperMimic is tracked directly as source code; SONIC, both Unitree training repositories, Unitree SDK2 and mjswan are pinned submodules. Start with [repository setup](repositories.md).
+The working platform is Unitree G1. League guides, figures and examples live under `docs/`. The source projects are ordinary editable folders under `external/`, tracked in this repository. Import tags and upstream commit IDs record their starting versions. Start with [repository setup](repositories.md).
 
 The experience we want is straightforward: a pilot uses a gamepad to move, guard and request a skill, while the robot handles its own balance and execution. A punch should remain useful when it meets an opponent, misses its target or is interrupted. After losing balance, the robot should have a defined path back to a controllable state. The same commands should let a developer practice in simulation and later operate a qualified physical robot.
 
@@ -52,11 +52,21 @@ For the league, the opportunity is to make controller experiments affordable eno
 
 We would keep the reproduced SONIC baseline while developing a smaller scratch-training experiment. First establish that our data and environment can train a few useful motions. Then investigate a learned dynamics model as a way to expand coverage. The [training from scratch guide](from_scratch.md) separates the available starting points from the integration work required.
 
+[ProtoMotions](../external/ProtoMotions) provides another starting point for motion imitation and generative humanoid policies, including G1 examples. It can support an independent tracker experiment or comparisons across simulators. Use its own installation and motion preparation workflow, then evaluate the resulting controller on the same contact tasks; its inclusion here does not connect its training loop to SONIC or mjlab automatically.
+
 ## Build a motion library around usable skills
 
 A league needs a modest, reliable vocabulary before it needs a large repertoire. Begin with stance, guard, stepping, turning and recovery. Add one punch, then a kick, with a stable start and finish. Jumping comes later because takeoff, landing and interruption each introduce additional states that need testing.
 
-Use existing robot references or recorded teleoperation where possible. For a movement available only on video, a practical route is **GVHMR → GMR or UMR → validated robot references → simulation training**. GVHMR recovers human motion; retargeting maps it onto the robot. UMR is the method based on learned point cloud correspondence. The [motion preparation guide](motions.md) covers the checks between those stages.
+Fighting games such as Mortal Kombat are another source of skill ideas: guards, steps, strikes and transitions can become candidates for the motion library. Their animations still need to pass the G1's physical constraints.
+
+[![Mortal Kombat gameplay showing Scorpion and Raiden exchanging attacks](https://gifdb.com/images/branded/high/mortal-kombat-game-gameplay-ti3iu6f8addxfssi.gif)](https://gifdb.com/gif/mortal-kombat-game-gameplay-ti3iu6f8addxfssi.html)
+
+*Mortal Kombat gameplay, game by NetherRealm Studios / Warner Bros. Games. [GIF source and uploader](https://gifdb.com/gif/mortal-kombat-game-gameplay-ti3iu6f8addxfssi.html); [media attribution](assets/README.md).*
+
+Use each clip as a proposal, then retarget and test it against the actual robot. A candidate must fit its joint ranges, balance and contact constraints, and stay within motor torque and speed limits through execution and recovery. Check sustained load as well as brief peaks. Reject infeasible motions or adapt their reach and timing before training. The [motion feasibility checks](motions.md#game-footage-as-a-skill-source) explain this filter.
+
+Use existing robot references or recorded teleoperation where possible. For a movement available only on video, a practical route is **human motion recovery → GMR or UMR → validated robot references → simulation training**. FlowHMR is a newer reconstruction candidate that uses physics tracking rewards; GVHMR remains a reference pipeline with a GMR conversion path. UMR retargets using learned point cloud correspondence. The [motion preparation guide](motions.md) links the methods and covers the checks between stages.
 
 [![Robo Jab animated demonstration of a G1 tracking a punch in simulation, with a reference overlay](https://raw.githubusercontent.com/abtonmoy/ai_hackathon_calhacks/bd8a0a65c60787296c7eb9a90be10b17fae3e12b/assets/sim_to_sim.gif)](https://github.com/abtonmoy/ai_hackathon_calhacks)
 

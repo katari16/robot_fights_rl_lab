@@ -22,6 +22,7 @@ Copyright remains with the original rights holders. The [arXiv distribution lice
 | GigaBrain overview | Cheng et al., [project](https://shepherd1226.github.io/gigabrain-wbc-0.5/) | Author-hosted figure in the main guide |
 | TRACE overview | Lan et al., [project](https://bfm-trace.github.io/) | Author-hosted figure in the training guide |
 | Jab execution and pipeline GIFs | Robo Jab team, [repository at the referenced commit](https://github.com/abtonmoy/ai_hackathon_calhacks/tree/bd8a0a65c60787296c7eb9a90be10b17fae3e12b) | Remote GIFs; simulation and reference stages labeled |
+| Mortal Kombat gameplay GIF | Game by NetherRealm Studios / Warner Bros. Games; [GIFDB upload by Wild Master](https://gifdb.com/gif/mortal-kombat-game-gameplay-ti3iu6f8addxfssi.html), with Gamelution watermark visible in the footage | Remote GIF illustrating candidate skill ideas; physical feasibility must be assessed for G1 |
 | REK0 thumbnail and recording | REK, [event video](https://www.youtube.com/watch?v=PR7yNhfHAKg) | Remote thumbnail linking to the recording |
 | REK simulator image and gameplay | REK / Reflex Arc, [engineering account](https://reflexarc.co.uk/projects/rek-robots) | Remote still linking to the published video |
 

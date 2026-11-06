@@ -29,3 +29,7 @@ The Robo Jab team's GIF connects a source video, human motion recovery, retarget
 [Try the SuperMimic browser demo](https://supermimic.github.io/demo/) to inspect its motion tracker, then see the hardware demonstrations on the [project page](https://supermimic.github.io/#robot). Use these to understand motion execution. Contact skills against another robot would require additional training and evaluation.
 
 The animated jab images are embedded from their authors' repository. The fight videos use clickable previews so they remain usable in a GitHub README. [Media sources and attribution](assets/README.md)
+
+## Game motion references
+
+The main guide includes a [Mortal Kombat gameplay GIF](README.md#build-a-motion-library-around-usable-skills) as a source of candidate fight skills. Game animations need retargeting and dynamic checks before they can enter the G1 motion library. See the [feasibility filter](motions.md#game-footage-as-a-skill-source) for joint, contact, balance and motor torque and speed limits.

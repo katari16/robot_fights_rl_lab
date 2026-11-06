@@ -73,7 +73,7 @@ This trains the stock tracking task. It does not fine tune SONIC or train a cont
 
 ## AWS through SkyPilot
 
-The supplied [Unitree AWS task](examples/sky_unitree_aws.yaml) adds SkyPilot support around `unitree_rl_mjlab`, using the setup/run pattern from [upstream mjlab](https://github.com/mujocolab/mjlab/tree/main/scripts/cloud). It fetches Unitree commit `1425b15f73bd4095f0df53709d7c389c3eb9e790`, matching our submodule, and installs its dependencies in a separate Python 3.11 environment. Unitree pins `mjlab==1.2.0` and `mujoco-warp==3.5.0`; installed dependency versions are saved with the outputs. Local submodule edits are not uploaded by this task.
+The supplied [Unitree AWS task](examples/sky_unitree_aws.yaml) adds SkyPilot support around `unitree_rl_mjlab`, using the setup/run pattern from [upstream mjlab](https://github.com/mujocolab/mjlab/tree/main/scripts/cloud). It uploads the local `external/unitree_rl_mjlab` directory, including your source edits, to `~/sky_workdir` on the training machine. Dependencies live in a separate Python 3.11 environment at `~/robot_fights_unitree_env`. Unitree pins `mjlab==1.2.0` and `mujoco-warp==3.5.0`; Python source checksums and installed dependency versions are saved with the outputs. Commit your changes in this repository to retain the exact source version used for an experiment.
 
 The default is `Unitree-G1-Flat`, 512 environments and 100 iterations on one AWS L4. This is a small locomotion test with TensorBoard logging, requiring neither a motion dataset nor a W&B credential. It exercises Unitree's training workflow; the proposed contact curriculum and SONIC adaptation still need implementation. The template and command construction were checked locally; a GPU training run remains to be validated.
 
@@ -112,16 +112,16 @@ sky exec robot-fights-unitree docs/examples/sky_unitree_aws.yaml \
 For your own motion, use Unitree's `scripts/csv_to_npz.py` and matching robot configuration, then upload the result to the existing cluster:
 
 ```bash
-scp /path/to/motion.npz robot-fights-unitree:~/robot_fights_unitree_mjlab/motion.npz
+scp /path/to/motion.npz robot-fights-unitree:~/sky_workdir/motion.npz
 ```
 
-Use `--env MOTION_FILE=motion.npz` in the tracking command. Paths are resolved on the remote machine, relative to its Unitree checkout. The launcher rejects tracking jobs with a missing motion file. See the pinned [Unitree motion workflow](https://github.com/unitreerobotics/unitree_rl_mjlab/blob/1425b15f73bd4095f0df53709d7c389c3eb9e790/README.md#2-motion-imitation-training).
+Use `--env MOTION_FILE=motion.npz` in the tracking command. Paths are resolved on the remote machine, relative to `~/sky_workdir`. The launcher rejects tracking jobs with a missing motion file. See the pinned [Unitree motion workflow](https://github.com/unitreerobotics/unitree_rl_mjlab/blob/1425b15f73bd4095f0df53709d7c389c3eb9e790/README.md#2-motion-imitation-training). After changing package dependencies, run `sky launch` again to repeat setup; `sky exec` synchronizes source and runs the existing environment.
 
 The instance stays running so checkpoints can be inspected and retrieved. Copy outputs before terminating it:
 
 ```bash
 mkdir -p runs
-rsync -av robot-fights-unitree:~/robot_fights_unitree_mjlab/logs/ runs/unitree/
+rsync -av robot-fights-unitree:~/sky_workdir/logs/ runs/unitree/
 sky logs robot-fights-unitree --sync-down
 sky down robot-fights-unitree
 ```
