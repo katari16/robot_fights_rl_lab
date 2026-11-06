@@ -2,7 +2,13 @@
 
 [Main guide](README.md)
 
-These examples make different parts of the development path visible. They belong to the linked projects and are not results produced by this repository.
+These examples make different parts of the development path visible. The first is the local arena demo; the others belong to their linked projects.
+
+## Local G1 arena
+
+[![Two Unitree G1s replaying jab references in the RSL arena](assets/g1-arena.gif)](assets/g1-arena.mp4)
+
+[Watch the video](assets/g1-arena.mp4) or [run the Python and mjswan demo](simulation.md). This is kinematic reference playback, with stock G1 models and a rectangular enclosure. It demonstrates scene composition and motion inspection before a learned controller and contact training are connected.
 
 ## Physical robot fights
 

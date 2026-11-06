@@ -38,7 +38,7 @@ python scripts/rsl_rl/train.py --headless --task Unitree-G1-29dof-Velocity
 
 [mjswan](../external/mjswan) combines MuJoCo WebAssembly, ONNX Runtime and Three.js to run interactive simulations in the browser. Scenes can be shared as static websites, including through GitHub Pages. Use it to inspect robot motion, apply disturbances interactively and share exported policy demonstrations. See the [upstream demo](https://ttktjmt.github.io/mjswan/) and [setup instructions](https://github.com/ttktjmt/mjswan/blob/ad5dd61a13459849ca78d5be4f8c6337b895bab5/README.md#quick-start).
 
-For a G1 policy, bring the MuJoCo model, exported ONNX policy and matching observation and action logic into the viewer. The upstream [mjlab porting guide](https://mjswan.readthedocs.io/en/latest/skills/mjlab-to-mjswan/) is a starting point. The mjswan source is editable here; a league scene and policy integration still need to be built and checked against the original simulator.
+For a G1 policy, bring the MuJoCo model, exported ONNX policy and matching observation and action logic into the viewer. The upstream [mjlab porting guide](https://mjswan.readthedocs.io/en/latest/skills/mjlab-to-mjswan/) is a starting point. The local [G1 arena demo](simulation.md) now uses this engine for two-robot reference playback. The editable source adds a validated `setPose` API for paused scenes without a policy. Learned policy integration still needs to be built and checked against its original simulator.
 
 ## Video motion recovery
 
