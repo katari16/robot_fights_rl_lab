@@ -7,3 +7,6 @@ logs/
 .env.*
 *.pt
 *.onnx
+.pytest_cache/
+simulation/output/
+simulation/data/

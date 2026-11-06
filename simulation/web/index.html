@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RSL G1 arena</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="viewport" aria-label="Interactive two G1 arena"></main>
+<header><img src="logo.svg" alt="RSL"><div><h1>G1 arena</h1><p>Robotic Sports League</p></div><span class="badge">Reference motion</span></header>
+<div id="status" role="status">Loading the arena…</div>
+<footer>
+  <div class="timeline"><label for="timeline">Motion</label><input id="timeline" type="range" min="0" max="1" step="0.001" value="0" aria-label="Motion time"><output id="time">0.0 s</output></div>
+  <div class="controls">
+    <button id="play" type="button">Pause</button><button id="reset" type="button">Restart</button>
+    <label for="mode">Pose</label><select id="mode"><option value="replay">Jab recording</option><option value="nominal">Nominal</option></select>
+    <label for="speed">Speed</label><select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option></select>
+    <label for="camera">View</label><select id="camera"><option value="arena">Arena</option><option value="ringside">Ringside</option><option value="overhead">Overhead</option></select>
+    <span class="help">Drag to orbit · scroll to zoom</span>
+  </div>
+</footer>
+<a class="credit" href="https://github.com/ttktjmt/mjswan" target="_blank" rel="noreferrer">Visualized with mjswan</a>
+<script type="module" src="viewer.js"></script>
+</body></html>

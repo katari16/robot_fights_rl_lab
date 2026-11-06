@@ -1,3 +1,4 @@
+import { validatedPose } from './pose';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
@@ -976,6 +977,23 @@ export class mjswanRuntime {
   /** Start or stop one `mode="interval"` term's schedule. */
   setEventArmed(name: string, armed: boolean): void {
     this.eventManager?.setArmed(name, armed);
+  }
+
+  /** Apply a reference pose without advancing dynamics. */
+  setPose(qpos: ArrayLike<number>): void {
+    if (!this.mjModel || !this.mjData) throw new Error('Load a scene before setting a pose');
+    if (this.running || this.policyRunner || this.onnxModule) {
+      throw new Error('Kinematic poses require a paused, policy-free scene');
+    }
+    const pose = validatedPose(qpos, this.mjModel.nq, this.mjModel.jnt_type, this.mjModel.jnt_qposadr);
+    this.mjData.qpos.set(pose);
+    this.mjData.qvel.fill(0);
+    this.mjData.ctrl.fill(0);
+    this.mjData.qacc_warmstart.fill(0);
+    this.mjData.qfrc_applied.fill(0);
+    this.mjData.xfrc_applied.fill(0);
+    this.mujoco.mj_forward(this.mjModel, this.mjData);
+    this.updateCachedState();
   }
 
   /** Resume the physics loop (rendering runs continuously regardless). */

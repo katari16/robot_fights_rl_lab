@@ -365,6 +365,11 @@ class Engine implements MjswanEngine {
     this.runtime.resetSimulation();
   }
 
+  setPose(qpos: ArrayLike<number>): void {
+    if (this.disposed || this.loading) throw new Error('Cannot set a pose while loading or disposed');
+    this.runtime.setPose(qpos);
+  }
+
   getState(): MjswanEngineState {
     return this.state;
   }

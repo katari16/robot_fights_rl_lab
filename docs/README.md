@@ -1,5 +1,11 @@
 # European Robot Fighting League
 
+[![Two standard Unitree G1s rehearsing a jab in the rectangular RSL arena](assets/g1-arena.gif)](assets/g1-arena.mp4)
+
+[Watch the arena video](assets/g1-arena.mp4) · [Run the Python and mjswan demo](simulation.md)
+
+*The local demo replays retargeted Robo Jab references, starting and ending in a nominal pose. It establishes a shared arena and motion inspection workflow. Learned tracking and contact training remain the next stages.*
+
 This repository describes how we would build a humanoid fighting league around Unitree G1 robots, and gives developers a starting point for the control, training and deployment work.
 
 The working platform is Unitree G1. League guides, figures and examples live under `docs/`. The source projects are ordinary editable folders under `external/`, tracked in this repository. Import tags and upstream commit IDs record their starting versions. Start with [repository setup](repositories.md).

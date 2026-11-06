@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 528 252" width="528" height="252" role="img" aria-label="RSL, Robotic Sports League">
+<title>RSL mark, recovered supplied paths</title>
+<desc>The supplied SVG was truncated in its final detail. These are its intact paths, including the center hexagon outline. See docs/assets/README.md.</desc>
+<defs>
+<linearGradient id="g_silber" gradientUnits="userSpaceOnUse" x1="6.43" y1="24.287" x2="72.581" y2="274.157"><stop offset="0" stop-color="#F2F6FC"/><stop offset="0.5" stop-color="#BAC4D2"/><stop offset="1" stop-color="#8C97A8"/></linearGradient>
+<linearGradient id="g_tuerkis" gradientUnits="userSpaceOnUse" x1="14.647" y1="54.382" x2="81.893" y2="304.053"><stop offset="0" stop-color="#69F1DB"/><stop offset="0.5" stop-color="#21D7B8"/><stop offset="1" stop-color="#15A490"/></linearGradient>
+<linearGradient id="g_violett" gradientUnits="userSpaceOnUse" x1="19.533" y1="80.776" x2="80.858" y2="334.382"><stop offset="0" stop-color="#D3BDFE"/><stop offset="0.5" stop-color="#9162E6"/><stop offset="1" stop-color="#6A3FC0"/></linearGradient>
+<linearGradient id="g_mutter" gradientUnits="userSpaceOnUse" x1="230.38" y1="126" x2="296.62" y2="126"><stop offset="0" stop-color="#BAC4D2"/><stop offset="0.5" stop-color="#21D7B8"/><stop offset="1" stop-color="#9162E6"/></linearGradient>
+</defs>
+<g id="rsl-mark">
+<path fill="url(#g_silber)" d="M230.069 99.727 L239.2 83.911 L261.051 83.911 L263.5 79.625 L240.286 39 L213.133 39 L204.25 54.545 Z M94.633 213 L44.918 126 L94.633 39 L168.214 39 L190.5 0 L72 0 L0 126 L72 252 L190.5 252 L218 252 L240.286 213 L263.5 172.375 L265.949 168.089 L261.051 168.089 L239.2 168.089 L230.069 152.273 L204.25 197.455 L195.367 213 L168.214 213 Z"/>
+<path fill="url(#g_tuerkis)" d="M309 0 L218 0 L190.5 0 L168.214 39 L118.5 126 L168.214 213 L195.367 213 L204.25 197.455 L163.418 126 L204.25 54.545 L213.133 39 L240.286 39 L286.714 39 Z M322.75 54.545 L363.582 126 L322.75 197.455 L313.867 213 L286.714 213 L240.286 213 L218 252 L309 252 L336.5 252 L358.786 213 L408.5 126 L358.786 39 L331.633 39 Z"/>
+<path fill="url(#g_violett)" d="M331.633 39 L358.786 39 L432.367 39 L482.082 126 L432.367 213 L358.786 213 L336.5 252 L455 252 L527 126 L455 0 L336.5 0 L309 0 L286.714 39 L263.5 79.625 L261.051 83.911 L265.949 83.911 L287.8 83.911 L296.931 99.727 L322.75 54.545 L322.75 54.545 Z M322.75 197.455 L296.931 152.273 L287.8 168.089 L265.949 168.089 L263.5 172.375 L286.714 213 L313.867 213 Z"/>
+<path fill="url(#g_mutter)" fill-rule="evenodd" d="M217.5 126 L240.5 165.837 L286.5 165.837 L309.5 126 L286.5 86.163 L240.5 86.163 Z M223.5 126 L243.5 91.359 L283.5 91.359 L303.5 126 L283.5 160.641 L243.5 160.641 Z"/>
+</g></svg>
