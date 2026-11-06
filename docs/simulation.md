@@ -2,6 +2,8 @@
 
 [Main guide](README.md)
 
+For the learned punch and kick controller and the current repository video, see [G1 motion skills](g1_skills.md). This page documents the original arena and kinematic reference demo.
+
 [![Two G1s rehearsing a jab in the RSL arena](assets/g1-arena.gif)](assets/g1-arena.mp4)
 
 [Watch the 1080p video](assets/g1-arena.mp4). Two standard 29 DoF Unitree G1s start in a nominal pose, enter guard, take turns punching the air and return to nominal. The rectangular arena has a centered RSL mark, clear wall panels and turquoise and violet corner pads.

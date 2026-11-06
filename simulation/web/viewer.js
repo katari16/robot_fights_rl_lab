@@ -35,6 +35,15 @@ async function fetchOK(path){const r=await fetch(path);if(!r.ok)throw new Error(
 try{
   const [modelResponse,motionResponse]=await Promise.all([fetchOK('scene.mjz'),fetchOK('motion.json')]);
   motion=await motionResponse.json();
+  document.querySelector('.badge').textContent=motion.label||'Reference motion';
+  $('mode').querySelector('[value="replay"]').textContent=motion.description||'Jab recording';
+  if(motion.detail) document.querySelector('header p').textContent=motion.detail;
+  if(motion.segments){
+    const select=document.createElement('select');select.setAttribute('aria-label','Skill');
+    for(const part of motion.segments)select.add(new Option(part.name,String(part.start)));
+    select.onchange=()=>{seconds=Number(select.value);$('mode').value='replay';showPose();};
+    document.querySelector('.controls').append(select);
+  }
   engine=await createEngine($('viewport'));
   await engine.loadScene({model:await modelResponse.arrayBuffer(),viewer:{...cameras.arena,originType:'WORLD',enableReflections:false,enableShadows:true}});
   engine.pause();

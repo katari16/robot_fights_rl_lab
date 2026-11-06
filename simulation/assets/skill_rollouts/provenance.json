@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-06",
+  "kind": "Recorded single-robot physics rollouts, displayed twice in the arena",
+  "checkpoint": "training/output/foundation-v1/model_1200.pt",
+  "checkpoint_sha256": "cd741a18b2129ef9ec08f44c61453857a91fad5ccf38cc382d289a1027a23a70",
+  "rollout_sha256": {
+    "right_kick.npz": "1427f157cd2588f283a02afb81d86c1b8ed66eaef7f7ce5bdf84291a609e1dfa",
+    "right_punch.npz": "d2dbef6f7914f53f0ad5c454d868af930dc07b91d1e89803f4012f4de334cf5d",
+    "left_punch.npz": "ddcc88826ef7c2fc9f0568cb7e31a2cfa769f8a4c78cfd0c31841e1930fbf56b"
+  },
+  "limitations": [
+    "No opponent or target interaction",
+    "No hardware test",
+    "No SONIC fine tuning or LoRA training",
+    "Viewer replays states; inference is in training/evaluate.py",
+    "Velocity impulses are narrow balance tests; no hardware torque-speed or thermal validation"
+  ]
+}

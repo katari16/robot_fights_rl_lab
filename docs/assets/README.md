@@ -4,6 +4,14 @@
 
 Figures and demonstrations are attributed to their original creators. Their inclusion illustrates the technical discussion and does not imply affiliation or that the league has reproduced the results.
 
+## Learned G1 skills
+
+`g1-skills.mp4`, `g1-skills.gif` and `g1-skills.jpg` are locally rendered recordings of our first mjlab tracking experiment. They show physics rollouts from checkpoint 1200 of `training/output/foundation-v1`, with two copies of each single-robot evaluation placed in the RSL arena. They are not footage of a two-robot interaction or physical hardware.
+
+The learned references originate from the pinned Robo Jab jab recording and the SONIC example kick. The video-to-retargeting stage was not rerun here. Source revisions, preparation, training settings and evaluation limitations are recorded in [G1 motion skills](../g1_skills.md), with [machine-readable results and hashes](../results/g1-skills.json). Generated rollout arrays are included under `simulation/assets/skill_rollouts` so the browser preview runs without training.
+
+The arena uses the supplied RSL mark reconstruction and Unitree G1 visual assets described below. Rendering uses `simulation/skills.py`; browser visualization uses the included mjswan engine. No broader license to the source motions or upstream robot assets is granted by these recordings.
+
 ## SuperMimic figure
 
 `supermimic-training-loop.png` is the diagram from Figure 2, page 4 of **SuperMimic: Scaling Humanoid Whole-Body Control with One Differentiable World Model**, by Qiayuan Liao, Yiyang Shao, Junfeng Long, Kevin Zakka, Roberto Horowitz, Pieter Abbeel and Koushil Sreenath, CoRL 2026.
