@@ -8,9 +8,9 @@ Existing robot references and recorded teleoperation are usually easier to valid
 
 ## Recover motion from video
 
-[GVHMR](https://github.com/zju3dv/GVHMR) estimates world grounded human motion from monocular video. Its output is a body motion estimate, not robot joint targets. [GMR](https://github.com/YanjieZe/GMR) includes a GVHMR conversion path and maps human motion onto supported humanoid models.
+[GVHMR](../external/GVHMR) estimates world grounded human motion from monocular video. Its output is a body motion estimate, not robot joint targets. [GMR](https://github.com/YanjieZe/GMR) includes a GVHMR conversion path and maps human motion onto supported humanoid models.
 
-[FlowHMR](https://github.com/flowhmr/flowhmr) is a newer candidate worth evaluating for this pipeline. It uses physics tracking rewards during training; its [project demonstrations](https://flowhmr.github.io/) also show GMR retargeting followed by SONIC tracking on a simulated G1. This is useful evidence for integration, but each proposed fighting skill still needs its own feasibility and contact tests. [OnlineHMR](https://tsukasane.github.io/Video-OnlineHMR/) is another option when causal, streaming reconstruction is needed. These methods are linked for evaluation and are not imported here.
+[FlowHMR](../external/flowhmr) is a newer candidate worth evaluating for this pipeline. It uses physics tracking rewards during training; its [project demonstrations](https://flowhmr.github.io/) also show GMR retargeting followed by SONIC tracking on a simulated G1. This is useful evidence for integration, but each proposed fighting skill still needs its own feasibility and contact tests. Both FlowHMR and GVHMR are included as editable source; see [setup, dependencies and licences](repositories.md#video-motion-recovery). [OnlineHMR](https://tsukasane.github.io/Video-OnlineHMR/) remains an external option for causal, streaming reconstruction.
 
 [UMR](../external/UMR) is the point cloud based alternative. It learns surface correspondences and uses them in constrained retargeting. It is useful when morphology and interaction contacts matter beyond sparse joint matching. Its correspondence stage is reused for the same source template and robot. See the [included source and setup](repositories.md#retargeting-and-motion-learning).
 
@@ -60,6 +60,6 @@ Keep entire source clips or recording sessions in a single data split. Adjacent 
 
 ## Follow an existing example
 
-The [Robo Jab repository](https://github.com/abtonmoy/ai_hackathon_calhacks) connects phone video, GVHMR, GMR and a G1 tracking trainer. Its [animated pipeline](demonstrations.md#a-punch-before-contact-training) makes the intermediate artifacts visible. Use it to understand how a recorded movement reaches a policy; its reference formats and trainer configuration still need to be matched to your own stack.
+The [Robo Jab repository](https://github.com/abtonmoy/ai_hackathon_calhacks) connects phone video, GVHMR, GMR and a G1 tracking trainer. Its [animated pipeline](demonstrations.md#a-punch-before-contact-training) makes the intermediate artifacts visible. Read its [capture guide](https://github.com/abtonmoy/ai_hackathon_calhacks/blob/main/CAPTURE_GUIDE.md), [motion data format](https://github.com/abtonmoy/ai_hackathon_calhacks/blob/main/data/README.md) and [Unitree mjlab training record](https://github.com/abtonmoy/ai_hackathon_calhacks/blob/main/TRAINING_RUNPOD.md) to follow the handoff between stages. Its reference formats and trainer configuration still need to be matched to your own stack.
 
 Once a reference is ready, choose between [training a tracker from scratch](from_scratch.md) and [adapting an existing controller](training.md). Both routes need dynamic execution tests, and either route needs additional scenes and evaluation when the skill is expected to make physical contact.

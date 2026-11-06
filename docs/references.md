@@ -21,14 +21,14 @@ The initial sources were checked on 21 October 2026; SuperMimic and additional d
 
 | Material | Use |
 | --- | --- |
-| [GVHMR](https://github.com/zju3dv/GVHMR) | Recover human motion from monocular video |
-| [FlowHMR](https://github.com/flowhmr/flowhmr), [paper](https://arxiv.org/abs/2610.03691) and [project](https://flowhmr.github.io/) | Physics guided video motion recovery; project demonstrates GMR and SONIC tracking on simulated G1 |
+| [GVHMR](https://github.com/zju3dv/GVHMR) and [included source](../external/GVHMR) | Recover human motion from monocular video |
+| [FlowHMR](https://github.com/flowhmr/flowhmr), [included source](../external/flowhmr), [paper](https://arxiv.org/abs/2610.03691) and [project](https://flowhmr.github.io/) | Physics guided video motion recovery; project demonstrates GMR and SONIC tracking on simulated G1 |
 | [OnlineHMR](https://tsukasane.github.io/Video-OnlineHMR/) | Causal reconstruction for streaming video |
 | [GMR](https://github.com/YanjieZe/GMR) and [paper](https://arxiv.org/abs/2510.02252) | Retarget human motion to robot joints |
 | [UMR](https://github.com/hanyang9/UMR) and [paper](https://arxiv.org/abs/2609.02134) | Retarget with learned surface correspondence |
 | [ProtoMotions](https://github.com/NVlabs/ProtoMotions) and [documentation](https://nvlabs.github.io/ProtoMotions/) | Motion imitation, generative policies and G1 training and deployment workflows |
 | [BONES SEED](https://huggingface.co/datasets/bones-studio/seed) | Existing human and robot motion references |
-| [Robo Jab](https://github.com/abtonmoy/ai_hackathon_calhacks) | Video-to-jab pipeline and animated simulation examples |
+| [Robo Jab](https://github.com/abtonmoy/ai_hackathon_calhacks), [capture guide](https://github.com/abtonmoy/ai_hackathon_calhacks/blob/main/CAPTURE_GUIDE.md) and [training record](https://github.com/abtonmoy/ai_hackathon_calhacks/blob/main/TRAINING_RUNPOD.md) | Worked video-to-jab pipeline using GVHMR, GMR and Unitree mjlab, with animated simulation examples |
 | [mjlab v1.6.0](https://github.com/mujocolab/mjlab/tree/v1.6.0) | GPU environments and baseline tasks |
 | [Unitree RL Mjlab](https://github.com/unitreerobotics/unitree_rl_mjlab) | Unitree G1 training with mjlab and MuJoCo Warp |
 | [Unitree RL Lab](https://github.com/unitreerobotics/unitree_rl_lab) | Unitree G1 training with Isaac Lab, followed by MuJoCo deployment validation |

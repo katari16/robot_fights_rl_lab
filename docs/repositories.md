@@ -16,6 +16,8 @@ This repository targets Unitree G1. League documentation, figures and examples l
 | [mjswan](../external/mjswan) | Interactive MuJoCo simulation and ONNX policy visualization in the browser | [ad5dd61](https://github.com/ttktjmt/mjswan/commit/ad5dd61a13459849ca78d5be4f8c6337b895bab5) | `upstream/mjswan/ad5dd61` |
 | [UMR](../external/UMR) | Human to humanoid motion retargeting with learned point cloud correspondence | [d1cdaed](https://github.com/hanyang9/UMR/commit/d1cdaedaf67a827198da71c5fa831f48b2e51f91) | `upstream/UMR/d1cdaed` |
 | [ProtoMotions](../external/ProtoMotions) | Motion imitation and generative humanoid policy training, including G1 workflows | [b43fc6f](https://github.com/NVlabs/ProtoMotions/commit/b43fc6fcfebb4996eb651dda8ea8ce981c5433a6) | `upstream/ProtoMotions/b43fc6f` |
+| [flowhmr](../external/flowhmr) | Video motion reconstruction with physics tracking rewards | [87ebb48](https://github.com/flowhmr/flowhmr/commit/87ebb483ce9da32be72c67971bc8fd76f27251f3) | `upstream/flowhmr/87ebb48` |
+| [GVHMR](../external/GVHMR) | World grounded human motion recovery from video | [ee960bb](https://github.com/zju3dv/GVHMR/commit/ee960bb6e2ea2d381aa97f08e9b71ef320b624b1) | `upstream/GVHMR/ee960bb` |
 
 Each annotated tag points to the import baseline in this repository. Its message records the original repository and full upstream commit ID. Source files, licenses and notices are preserved at that baseline. Later edits belong to this repository's normal history.
 
@@ -38,6 +40,51 @@ python scripts/rsl_rl/train.py --headless --task Unitree-G1-29dof-Velocity
 
 For a G1 policy, bring the MuJoCo model, exported ONNX policy and matching observation and action logic into the viewer. The upstream [mjlab porting guide](https://mjswan.readthedocs.io/en/latest/skills/mjlab-to-mjswan/) is a starting point. The mjswan source is editable here; a league scene and policy integration still need to be built and checked against the original simulator.
 
+## Video motion recovery
+
+FlowHMR and GVHMR are included as editable source, together with their recursively pinned source dependencies. Their upstream `.gitmodules` files are retained as provenance; all actual files here are tracked by the parent repository. Skip the upstream clone and submodule initialization steps and start in `external/flowhmr` or `external/GVHMR`.
+
+Follow [FlowHMR installation](../external/flowhmr/docs/install.md) or [GVHMR installation](../external/GVHMR/docs/INSTALL.md) in separate environments. Both need separately obtained checkpoints and body models. FlowHMR inference uses its V2M environment; its optional PHC+ training and evaluation use a separate Isaac Gym environment. These are distinct from the Unitree mjlab training environment.
+
+Once the respective environment and assets are installed, run from the selected source directory:
+
+```bash
+# From external/flowhmr, using its environment:
+python run_v2m_demo_generation.py assets/example/example.mp4
+
+# From external/GVHMR, using its environment; -s assumes a static camera:
+python tools/demo/demo.py --video=docs/example_video/tennis.mp4 -s
+```
+
+FlowHMR's optional PHC+ setup also requires its supplied patches. They are preserved but not applied at the import baseline. From this repository's root, check and apply them before following that setup:
+
+```bash
+git apply --check --directory=external/flowhmr/third_party/PerpetualHumanoidControl \
+  external/flowhmr/third_party/patches/*.patch
+git apply --directory=external/flowhmr/third_party/PerpetualHumanoidControl \
+  external/flowhmr/third_party/patches/*.patch
+```
+
+[Robo Jab](https://github.com/abtonmoy/ai_hackathon_calhacks) is a useful worked example connecting phone video, GVHMR, GMR, Unitree mjlab and a G1 policy. Start with its [capture guide](https://github.com/abtonmoy/ai_hackathon_calhacks/blob/main/CAPTURE_GUIDE.md), [training record](https://github.com/abtonmoy/ai_hackathon_calhacks/blob/main/TRAINING_RUNPOD.md) and [deployment contract](https://github.com/abtonmoy/ai_hackathon_calhacks/blob/main/DEPLOY.md). It remains an external reference. Match its joint ordering, motion format and observations to the local trainer; this repository has not reproduced its run or validated opponent contact.
+
+The [GVHMR licence](../external/GVHMR/LICENSE) limits use to educational, research and non-profit purposes and directs commercial enquiries to its authors. FlowHMR's own code is [Apache 2.0](../external/flowhmr/LICENSE), while its bundled [VGGT-Omega dependency](../external/flowhmr/third_party/vggt-omega/LICENSE) uses the FAIR Noncommercial Research License. Other components and downloaded assets retain their own terms.
+
+### Bundled source dependencies
+
+These revisions are recorded in the two parent import tags as well as the table below. The paths are ordinary editable folders, including the optional DPVO build dependencies.
+
+| Path under `external/` | Upstream revision |
+| --- | --- |
+| `flowhmr/third_party/PerpetualHumanoidControl` | [846988d](https://github.com/ZhengyiLuo/PerpetualHumanoidControl/commit/846988d433ce1f341e85ac6fbd2cd51911bb3341) |
+| `flowhmr/third_party/YOLOX` | [6ddff48](https://github.com/Megvii-BaseDetection/YOLOX/commit/6ddff4824372906469a7fae2dc3206c7aa4bbaee) |
+| `flowhmr/third_party/sam-3d-body` | [b5c765a](https://github.com/facebookresearch/sam-3d-body/commit/b5c765a0d89d789985e186d396315e7590887b94) |
+| `flowhmr/third_party/vggt-omega` | [48b23c8](https://github.com/facebookresearch/vggt-omega/commit/48b23c8ce72c9a8fcf987f0d7f43d8e4870759f6) |
+| `GVHMR/third-party/DPVO` | [c0c5a10](https://github.com/princeton-vl/DPVO/commit/c0c5a104c9c58663aa9be62c3f125d5b52874f3e) |
+| `GVHMR/third-party/DPVO/DBoW2` | [89f8b27](https://github.com/lahavlipson/DBoW2/commit/89f8b270270fa68a399c10cd90427a9f7ec4fa81) |
+| `GVHMR/third-party/DPVO/Pangolin` | [93712f0](https://github.com/zachteed/Pangolin/commit/93712f0666003f392ac8414bc2c0a009081e91c1) |
+| `GVHMR/third-party/DPVO/Pangolin/components/pango_python/pybind11` | [787d2c8](https://github.com/pybind/pybind11/commit/787d2c88cafa4d07fb38c9519c485a86323cfcf4) |
+| `GVHMR/third-party/DPVO/Pangolin/scripts/vcpkg` | [e809a42](https://github.com/microsoft/vcpkg/commit/e809a42f87565e803b2178a0c11263f462d1800a) |
+
 ## Retargeting and motion learning
 
 [UMR](../external/UMR) maps human motion onto a humanoid using learned surface correspondence, then optimizes the robot motion with contact and kinematic constraints. Its examples include Unitree G1. Follow its [installation instructions](../external/UMR/README.md#installation), including the separately obtained SMPL-X body model, then run from its directory:
@@ -50,7 +97,7 @@ python scripts/humanoid_retarget_pipeline.py \
 
 [ProtoMotions](../external/ProtoMotions) supplies motion imitation and generative policy learning, G1 workflows and multiple simulator backends. Start with its [installation guide](https://nvlabs.github.io/ProtoMotions/getting_started/installation.html) and [G1 deployment workflow](https://nvlabs.github.io/ProtoMotions/tutorials/workflows/g1_deployment.html). Keep its environment separate from the Unitree mjlab environment.
 
-The intended pipeline is human motion, retargeting, validated robot references, tracking training, then contact training. Check joint and body ordering, coordinate conventions, sampling rate and velocities when moving UMR output into a trainer. The [motion preparation guide](motions.md#recover-motion-from-video) compares reconstruction options, including FlowHMR, GVHMR and OnlineHMR. These are linked for review and have not been imported.
+The intended pipeline is human motion, retargeting, validated robot references, tracking training, then contact training. Check joint and body ordering, coordinate conventions, sampling rate and velocities when moving UMR output into a trainer. The [motion preparation guide](motions.md#recover-motion-from-video) compares the included FlowHMR and GVHMR sources with OnlineHMR, which remains an external reference.
 
 ## SuperMimic source
 
