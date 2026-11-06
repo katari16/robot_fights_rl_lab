@@ -120,7 +120,7 @@ def make_replay(arena: Arena, clip: np.ndarray) -> np.ndarray:
     return sequence
 
 
-def sample(replay: np.ndarray, seconds: float) -> np.ndarray:
-    frame = (seconds * FPS) % len(replay)
+def sample(replay: np.ndarray, seconds: float, fps: float = FPS) -> np.ndarray:
+    frame = (seconds * fps) % len(replay)
     i = int(frame)
     return interpolate(replay[i], replay[(i + 1) % len(replay)], frame - i)

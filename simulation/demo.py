@@ -132,7 +132,17 @@ def render(
     print(f"Video: {path.resolve()}")
 
 
-def build_web(arena, replay, output, logo, speed=1, mode="replay"):
+def build_web(
+    arena,
+    replay,
+    output,
+    logo,
+    speed=1,
+    mode="replay",
+    fps=FPS,
+    label="Reference motion",
+    description="Jab recording",
+):
     from mjswan.build.frontend import ClientBuilder, TEMPLATE_DIR, install_spa
     from mjswan.build.mjz import to_zip_deflated
 
@@ -150,11 +160,13 @@ def build_web(arena, replay, output, logo, speed=1, mode="replay"):
     subprocess.run([npm, "run", "build"], cwd=TEMPLATE_DIR, env=build_env, check=True)
     install_spa(output / "engine")
     to_zip_deflated(arena.spec, str(output / "scene.mjz"))
-    nominal = sample(replay, 0).tolist()
+    nominal = sample(replay, 0, fps).tolist()
     (output / "motion.json").write_text(
         json.dumps(
             dict(
-                fps=FPS,
+                fps=fps,
+                label=label,
+                description=description,
                 nominal=nominal,
                 initial_speed=speed,
                 initial_mode=mode,
