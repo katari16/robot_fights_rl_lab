@@ -1,10 +1,10 @@
 # European Robot Fighting League
 
-[![Two standard Unitree G1s rehearsing a jab in the rectangular RSL arena](assets/g1-arena.gif)](assets/g1-arena.mp4)
+[![Learned G1 left punch, right punch and front kick in the rectangular RSL arena](assets/g1-skills.gif)](assets/g1-skills.mp4)
 
-[Watch the arena video](assets/g1-arena.mp4) · [Run the Python and mjswan demo](simulation.md)
+[Watch the skills video](assets/g1-skills.mp4) · [Run the Python and mjswan demo](g1_skills.md) · [Arena construction](simulation.md)
 
-*The local demo replays retargeted Robo Jab references, starting and ending in a nominal pose. It establishes a shared arena and motion inspection workflow. Learned tracking and contact training remain the next stages.*
+*The local demo shows recorded physics rollouts of a learned G1 tracker: a left punch, a right punch and a front kick, each with entry and recovery. Two copies of the single-robot evaluations are displayed together. The controller has not yet been trained against an opponent.*
 
 This repository describes how we would build a humanoid fighting league around Unitree G1 robots, and gives developers a starting point for the control, training and deployment work.
 

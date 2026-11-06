@@ -2,6 +2,8 @@
 
 [Main guide](README.md)
 
+For the runnable local experiment with left and right punches and a front kick, see [G1 motion skills](g1_skills.md).
+
 This guide follows the adaptation path: begin with a working SONIC controller, then change its behavior through a contact curriculum and measured fine tuning. For a controller whose weights are learned from scratch, see [scratch training and SuperMimic](from_scratch.md). The two paths should eventually meet at the same evaluation suite.
 
 ## What is available
