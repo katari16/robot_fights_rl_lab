@@ -60,9 +60,9 @@ A league needs a modest, reliable vocabulary before it needs a large repertoire.
 
 Fighting games such as Mortal Kombat are another source of skill ideas: guards, steps, strikes and transitions can become candidates for the motion library. Their animations still need to pass the G1's physical constraints.
 
-[![Mortal Kombat gameplay showing Scorpion and Raiden exchanging attacks](https://gifdb.com/images/branded/high/mortal-kombat-game-gameplay-ti3iu6f8addxfssi.gif)](https://gifdb.com/gif/mortal-kombat-game-gameplay-ti3iu6f8addxfssi.html)
+[![Mortal Kombat gameplay showing Scorpion and Raiden exchanging attacks](https://gifdb.com/images/thumbnail/mortal-kombat-game-gameplay-ti3iu6f8addxfssi.gif)](https://gifdb.com/gif/mortal-kombat-game-gameplay-ti3iu6f8addxfssi.html)
 
-*Mortal Kombat gameplay, game by NetherRealm Studios / Warner Bros. Games. [GIF source and uploader](https://gifdb.com/gif/mortal-kombat-game-gameplay-ti3iu6f8addxfssi.html); [media attribution](assets/README.md).*
+*Mortal Kombat gameplay, game by NetherRealm Studios / Warner Bros. Games. [Larger GIF and source](https://gifdb.com/gif/mortal-kombat-game-gameplay-ti3iu6f8addxfssi.html); [media attribution](assets/README.md).*
 
 Use each clip as a proposal, then retarget and test it against the actual robot. A candidate must fit its joint ranges, balance and contact constraints, and stay within motor torque and speed limits through execution and recovery. Check sustained load as well as brief peaks. Reject infeasible motions or adapt their reach and timing before training. The [motion feasibility checks](motions.md#game-footage-as-a-skill-source) explain this filter.
 
