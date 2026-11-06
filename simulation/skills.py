@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import subprocess
+import sys
 
 import imageio.v2 as imageio
 import mujoco
@@ -12,7 +14,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy.spatial.transform import Rotation
 
-from arena import Arena, DEFAULT_LOGO, SPAWNS
+from arena import Arena, DEFAULT_LOGO, HERE, SPAWNS
 from demo import CAMERA, build_web
 from motion import sample
 
@@ -109,13 +111,16 @@ def render(arena, sequences, output, kind, width=1280, height=720):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, required=True)
-    parser.add_argument("--kind", choices=("reference", "policy"), required=True)
+    parser.add_argument("--source", type=Path, default=HERE / "assets/skill_rollouts")
+    parser.add_argument("--kind", choices=("reference", "policy"), default="policy")
     parser.add_argument("--render", type=Path)
     parser.add_argument("--web", type=Path)
+    parser.add_argument("--build-only", action="store_true")
+    parser.add_argument("--port", type=int, default=18766)
+    parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
     if not (args.render or args.web):
-        parser.error("Choose --render MP4, --web DIRECTORY, or both")
+        args.web = HERE / "output/skills-web"
     sequences = load_sequences(args.source, args.kind)
     arena = Arena()
     if args.render:
@@ -153,6 +158,19 @@ def main():
             else "Recorded single-robot physics evaluations; no opponent interaction"
         )
         path.write_text(json.dumps(data, separators=(",", ":")))
+        if not args.render and not args.build_only:
+            command = [
+                sys.executable,
+                str(HERE / "demo.py"),
+                "--serve-existing",
+                "--output",
+                str(args.web),
+                "--port",
+                str(args.port),
+            ]
+            if args.no_browser:
+                command.append("--no-browser")
+            subprocess.run(command, check=True)
 
 
 if __name__ == "__main__":

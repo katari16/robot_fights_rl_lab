@@ -67,7 +67,14 @@ def main():
           e.play();results.push(rejected(q));e.pause();return results;
         }""")
         assert all(checks), f"Pose validation failed: {checks}"
-        page.evaluate("window.arenaDemo.seek(4.8)")
+        segments = page.evaluate("window.arenaDemo.motion.segments || []")
+        if segments:
+            start = segments[-1]["start"]
+            page.select_option('select[aria-label="Skill"]', str(start))
+            assert abs(page.evaluate("window.arenaDemo.time") - start) < 1e-6
+            page.evaluate("time => window.arenaDemo.seek(time)", start + 2.56)
+        else:
+            page.evaluate("window.arenaDemo.seek(4.8)")
         page.wait_for_timeout(250)
         args.screenshot.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(args.screenshot))

@@ -16,7 +16,7 @@ from mjlab.tasks.tracking.mdp.commands import MotionLoader
 from src.tasks.tracking.config.g1.rl_cfg import unitree_g1_tracking_ppo_runner_cfg
 
 
-def evaluate(checkpoint, output, num_envs=64, seed=314, perturb=False):
+def evaluate(checkpoint, output, num_envs=64, seed=314, perturb=False, push_at=None):
     if not checkpoint.is_file():
         raise FileNotFoundError(checkpoint)
     torch.set_num_threads(4)
@@ -42,6 +42,7 @@ def evaluate(checkpoint, output, num_envs=64, seed=314, perturb=False):
         "seed": seed,
         "num_envs": num_envs,
         "perturb": perturb,
+        "push_at_seconds": push_at,
         "condition": "Clean model; initial root velocity +/-0.15 m/s and +/-0.15 rad/s"
         if perturb
         else "Clean model; exact nominal start",
@@ -77,7 +78,7 @@ def evaluate(checkpoint, output, num_envs=64, seed=314, perturb=False):
         )
         tip_index = robot.body_names.index(tip_name)
         torso_index = robot.body_names.index("torso_link")
-        tip_forward = torch.full((num_envs,), -torch.inf, device="cuda:0")
+        tip_forward = torch.zeros(num_envs, device="cuda:0")
         tip_height = torch.zeros(num_envs, device="cuda:0")
         failure_reasons = {name: 0 for name in raw.termination_manager.active_terms}
         first_failure = np.full(num_envs, -1, dtype=int)
@@ -93,6 +94,17 @@ def evaluate(checkpoint, output, num_envs=64, seed=314, perturb=False):
         with torch.no_grad():
             # Stop before the upstream command's end-of-clip state resampling.
             for frame in range(cmd.motion.time_step_total - 1):
+                if push_at is not None and frame == round(push_at / raw.step_dt):
+                    state = torch.cat(
+                        [robot.data.root_link_pose_w, robot.data.root_link_vel_w], dim=1
+                    ).clone()
+                    state[:, 7:13] += (
+                        torch.rand((num_envs, 6), device="cuda:0") * 2 - 1
+                    ) * 0.15
+                    robot.write_root_state_to_sim(state)
+                    raw.sim.forward()
+                    raw.sim.sense()
+                    obs = env.get_observations()
                 obs, _, done, _ = env.step(policy(obs))
                 failed = alive & done.bool()
                 for name in failure_reasons:
@@ -154,6 +166,12 @@ def evaluate(checkpoint, output, num_envs=64, seed=314, perturb=False):
             if saturation
             else None,
             "recorded_frames": len(qpos),
+            "recorded_root_displacement_m": float(
+                np.linalg.norm(qpos[-1][:2] - qpos[0][:2])
+            ),
+            "recorded_peak_motor_effort_nm": float(np.abs(torque).max())
+            if torque
+            else None,
             "failure_reasons": failure_reasons,
             "peak_tip_forward_m": tip_forward.cpu().tolist(),
             "peak_tip_height_m": tip_height.cpu().tolist(),
@@ -169,8 +187,27 @@ def evaluate(checkpoint, output, num_envs=64, seed=314, perturb=False):
             np.max(reference["body_pos_w"][:, tip_index, 2])
         )
         report["skills"][skill] = result
-        print(skill, json.dumps(result), flush=True)
+        print(
+            skill,
+            json.dumps({k: v for k, v in result.items() if not isinstance(v, list)}),
+            flush=True,
+        )
     (output / "metrics.json").write_text(json.dumps(report, indent=2) + "\n")
+    # Export the exact evaluated checkpoint, including its observation normalizer.
+    runner.export_policy_to_onnx(str(output))
+    import onnx
+    from onnx.reference import ReferenceEvaluator
+
+    onnx.checker.check_model(str(output / "policy.onnx"))
+    exported = runner.alg.get_policy().as_onnx(verbose=False).cpu().eval()
+    example = obs["actor"][:1].detach().cpu()
+    with torch.no_grad():
+        expected = exported(example).numpy()
+    actual = ReferenceEvaluator(str(output / "policy.onnx")).run(
+        None, {"obs": example.numpy()}
+    )[0]
+    np.testing.assert_allclose(actual, expected, atol=1e-5, rtol=1e-5)
+    print("ONNX graph and normalized actor output verified", flush=True)
     env.close()
     return report
 
@@ -182,5 +219,19 @@ if __name__ == "__main__":
     parser.add_argument("--num-envs", type=int, default=64)
     parser.add_argument("--seed", type=int, default=314)
     parser.add_argument("--perturb", action="store_true")
+    parser.add_argument(
+        "--push-at",
+        type=float,
+        help="Time in seconds for a +/-0.15 root velocity impulse",
+    )
     args = parser.parse_args()
-    evaluate(args.checkpoint, args.output, args.num_envs, args.seed, args.perturb)
+    if args.push_at is not None and not 0 <= args.push_at < 6.9:
+        parser.error("Push time must be within the skill, from 0 to 6.9 seconds")
+    evaluate(
+        args.checkpoint,
+        args.output,
+        args.num_envs,
+        args.seed,
+        args.perturb,
+        args.push_at,
+    )
